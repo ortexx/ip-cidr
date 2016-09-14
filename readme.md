@@ -2,7 +2,7 @@
 `npm install ip-cidr`
 
 # About
-Module for work with CIDR
+Module for work with CIDR (v4, v6)
 
 # Example
 ```js

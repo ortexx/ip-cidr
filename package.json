@@ -1,7 +1,7 @@
 {
     "name": "ip-cidr",
     "version": "0.0.1",
-    "description": "Module for work with CIDR",
+    "description": "Module for work with CIDR (v4, v6)",
     "main": "./ip-cidr.js",
     "author": {
         "name": "Balasyan Alexandr",
