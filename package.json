@@ -1,0 +1,27 @@
+{
+    "name": "ip-cidr",
+    "version": "0.0.1",
+    "description": "Module for work with CIDR",
+    "main": "./ip-cidr.js",
+    "author": {
+        "name": "Balasyan Alexandr",
+        "email": "mywebstreet@gmail.com"
+    },
+    "keywords": [
+        "ip",
+        "cidr",
+        "range",
+        "from",
+        "to",
+        "array"
+    ],
+    "license": "MIT",
+    "dependencies": {
+        "ip-address" : "^5",
+        "jsbn": "*"
+    }, 
+	"repository" : { 
+		"type" : "git",
+		"url" : "https://github.com/ortexx/ip-cidr"
+	}	
+}
