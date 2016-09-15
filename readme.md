@@ -32,7 +32,7 @@ cidr.toRange() // get array of start and end ip as string [startIpAsString, endI
 
 # FULL API
 ### .formatIP(address, options)
-returns the "ip-address" module object ip address in the specified in options format
+returns the "ip-address" module object ip address in the specified in options format    
 options are the same in all of the library functions and may include asBigInteger, asAddressObject or asString if options are empty
 
 ### .start(options)
@@ -51,8 +51,8 @@ get array of start and end ip [startIp, endIp]
 get object of start and end ip {start: startIp, end: endIp}
 
 ### .toArray(options) {
-get array of all ip in CIDR range
-you can set maximum of array elements with options.limit
+get array of all ip in CIDR range  
+you can set maximum of array elements with options.limit  
 if the limit is reached, you will receive additional information in options.limitResult
 
 ### arrayAction(fn, options)
