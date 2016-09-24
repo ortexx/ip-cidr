@@ -41,21 +41,21 @@ get start ip
 ### .end(options)
 get end ip
 
-### .toString() {
+### .toString() 
 get string cidr as "50.165.190.0/23"
 
-### .toRange(options) {
+### .toRange(options) 
 get array of start and end ip [startIp, endIp]
 
-### .toObject(options) {
+### .toObject(options) 
 get object of start and end ip {start: startIp, end: endIp}
 
-### .toArray(options) {
+### .toArray(options) 
 get array of all ip in CIDR range  
 you can set maximum of array elements with options.limit  
 if the limit is reached, you will receive additional information in options.limitResult
 
-### arrayAction(fn, options)
+### .arrayAction(fn, options)
 run fn for every element of CIDR range
 
 

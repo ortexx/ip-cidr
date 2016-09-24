@@ -1,6 +1,6 @@
 {
     "name": "ip-cidr",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "description": "Module for work with CIDR (v4, v6)",
     "main": "./ip-cidr.js",
     "author": {
