@@ -25,11 +25,13 @@ describe('IPCIDR:', function () {
   describe('check validity:', function () {
     it('should be valid', function () {
       let cidr = new IPCIDR(validCIDR);
+
       assert.isOk(cidr.isValid());
     });
 
     it('should be invalid', function () {
       let cidr = new IPCIDR(invalidCIDR);
+
       assert.isNotOk(cidr.isValid());
     });
   });
@@ -91,14 +93,14 @@ describe('IPCIDR:', function () {
   });
 
   describe("#toArray()", function () {
-    it('should returns the full array', function () {
+    it('should return the full array', function () {
       let cidr = new IPCIDR(validCIDR);
       let array = cidr.toArray();
 
       assert.equal(JSON.stringify(array), JSON.stringify(validRange));
     });
 
-    it('should returns a part of the range', function () {
+    it('should return a part of the range', function () {
       let cidr = new IPCIDR(validCIDR);
       let results = {};
       let options = {from: 3, limit: 10 };
@@ -112,7 +114,7 @@ describe('IPCIDR:', function () {
   });
 
   describe("#arrayAction()", function () {
-    it('should reads the full range', function () {
+    it('should read the full range', function () {
       let cidr = new IPCIDR(validCIDR);
       let counter = 0;
 
@@ -124,7 +126,7 @@ describe('IPCIDR:', function () {
       })
     });
 
-    it('should reads a part of the range', function () {
+    it('should read a part of the range', function () {
       let cidr = new IPCIDR(validCIDR);
       let counter = 1;
       let results = {};
