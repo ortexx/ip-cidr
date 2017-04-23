@@ -26,14 +26,14 @@ let fn = (ip) => {
 
 cidr.arrayAction(fn, { asAddressObject: true });
 cidr.toArray({ asBigInteger: true }); // get array of all ip in CIDR range as big integer;
-cidr.toRange() // get array of start and end ip as string [startIpAsString, endIpAsString]
+cidr.toRange(); // get array of start and end ip as string [startIpAsString, endIpAsString]
 
 ```
 
 # API  
 ### .formatIP(address, [options])  
 returns the "ip-address" module object in the necessary format  
-options are the same in all of the library functions and may include asBigInteger, asAddressObject or asString (by default)
+options are the same in all of the library functions and might include asBigInteger, asAddressObject or asString (by default)
 
 ### .start([options])  
 get start ip
@@ -53,9 +53,8 @@ get object of start and end ip {start: startIp, end: endIp}
 ### .toArray([options], [results])  
 get array of all ip in CIDR range  
 you can get information by chunks using options.from and options.limit  
-this options can be integer or big integer("jsbn" instance)  
-you can send results argument(object) to get all chunk information inside  
-pagination starts from 0, all results values are instance of "jsbn" 
+this options might be integer or big integer("jsbn" instance)  
+you can pass second argument "results" (object) to get all chunk pagination information
 
 ### .arrayAction(fn, [options], [results])  
 run fn for every element of CIDR range  
