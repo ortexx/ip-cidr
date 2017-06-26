@@ -7,6 +7,7 @@
     "name": "Balasyan Alexandr",
     "email": "mywebstreet@gmail.com"
   }, 
+  "license": "MIT", 
   "keywords": [
     "ip",
     "cidr",
@@ -14,8 +15,7 @@
     "from",
     "to",
     "array"
-  ], 
-  "license": "MIT", 
+  ],   
   "scripts": {
     "test": "mocha"
   },
