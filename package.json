@@ -1,12 +1,12 @@
 {
   "name": "ip-cidr",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Module for working with CIDR (v4, v6)",
-  "main": "./ip-cidr.js",
+  "main": "./index.js",
   "author": {
     "name": "Balasyan Alexandr",
     "email": "mywebstreet@gmail.com"
-  },    
+  },
   "keywords": [
     "ip",
     "cidr",
@@ -15,15 +15,17 @@
     "to",
     "array"
   ],
-  "license": "MIT",   
+  "license": "MIT",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "build": "browserify ./ip-cidr.js > ./dist/ip-cidr.js"
   },
   "dependencies": {
     "ip-address": "^5.8.6",
     "jsbn": "^0.1.0"
   },
   "devDependencies": {
+    "browserify": "^14.4.0",
     "mocha": "^3.2.0",
     "chai": "^3.5.0"
   },

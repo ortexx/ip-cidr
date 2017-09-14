@@ -1,7 +1,7 @@
 "use strict";
 
 const assert = require('chai').assert;
-const IPCIDR = require('../ip-cidr');
+const IPCIDR = require('../index');
 
 let validCIDR = '5.5.5.8/29';
 let validCIDRClear = '5.5.5.8';
