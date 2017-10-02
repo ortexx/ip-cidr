@@ -30,7 +30,7 @@ cidr.toRange(); // get array of start and end ip as string [startIpAsString, end
 ```
 
 ## Client side
-Load [/dist/ip-cidr.js]() as script and get the library in window.IPCIDR
+Load __/dist/ip-cidr.js__ as script and get the library in window.IPCIDR
 
 # API  
 ### .formatIP(address, [options])  
