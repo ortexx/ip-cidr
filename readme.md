@@ -29,6 +29,9 @@ cidr.toArray({ asBigInteger: true }); // get array of all ip in CIDR range as bi
 cidr.toRange(); // get array of start and end ip as string [startIpAsString, endIpAsString]
 ```
 
+## Client side
+Load [/dist/ip-cidr.js]() as script and get the library in window.IPCIDR
+
 # API  
 ### .formatIP(address, [options])  
 returns the "ip-address" module object in the necessary format  

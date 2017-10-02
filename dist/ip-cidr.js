@@ -107,7 +107,7 @@ class IPCIDR {
   }
 
   getChunkInfo(length, options) {
-    let from, limit, to;
+    let from, limit, to, maxLength;
 
     if(options.from !== undefined) {
       if(typeof options.from != 'object') {
@@ -127,10 +127,12 @@ class IPCIDR {
       limit = length;
     }
 
-    if(limit.compareTo(length) > 0) {
-      limit = length.subtract(from);
+    maxLength = length.subtract(from);
+    
+    if(limit.compareTo(maxLength) > 0) {
+      limit = maxLength;
     }
-
+    
     to = from.add(limit);
 
     return {
@@ -138,7 +140,7 @@ class IPCIDR {
       to: to,
       limit: limit,
       length: length
-    }
+    };
   }
 }
 

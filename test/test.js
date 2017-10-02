@@ -106,7 +106,7 @@ describe('IPCIDR:', function () {
       let options = {from: 3, limit: 10 };
 
       let array = cidr.toArray(options, results);
-
+      
       assert.equal(results.from.intValue(), options.from);
       assert.equal(results.to.intValue(), results.length.intValue());
       assert.equal(array.length, 5);
