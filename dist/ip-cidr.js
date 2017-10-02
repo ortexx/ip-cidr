@@ -135,6 +135,10 @@ class IPCIDR {
     
     to = from.add(limit);
 
+    if(to.compareTo(length) > 0) {
+      to = length; 
+    }
+
     return {
       from: from,
       to: to,
