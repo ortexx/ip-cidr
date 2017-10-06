@@ -19,7 +19,7 @@ cidr.end({ asBigInteger: true }); // get end ip as big integer
 
 let data = [];
 
-let fn = (ip) => {
+const fn = (ip) => {
     // do something with each element of CIDR range    
     data.push(ip) // ip is "ip-address" module object, because of option asAddressObject is true 
 }
@@ -53,10 +53,10 @@ get array of start and end ip [startIp, endIp]
 get object of start and end ip {start: startIp, end: endIp}
 
 ### .toArray([options], [results])  
-get array of all ip in CIDR range  
-you can get information by chunks using options.from and options.limit  
-this options might be integer or big integer("jsbn" instance)  
-you can pass second argument "results" (object) to get all chunk pagination information
+get an array of all ip in CIDR range  
+you can get an information by chunks using options.from and options.limit  
+this options might be an integer or a big integer("jsbn" instance)  
+you can pass the second argument "results" (object) to get all chunk pagination information
 
 ### .arrayAction(fn, [options], [results])  
 run fn for every element of CIDR range  
