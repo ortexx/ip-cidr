@@ -5,6 +5,7 @@
 Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/beaugunderson/ip-address)
 
 # Example  
+
 ```js
 const CIDR = require("ip-cidr");
 
