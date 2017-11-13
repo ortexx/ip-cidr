@@ -35,7 +35,7 @@ Load __/dist/ip-cidr.js__ as script and get the library in __window.IPCIDR__
 
 # API  
 ### .formatIP(address, [options])  
-returns the "ip-address" module object in the necessary format  
+returns "ip-address" module object in the necessary format  
 options are the same in all of the library functions and might include asBigInteger, asAddressObject or asString (by default)
 
 ### .start([options])  
