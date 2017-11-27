@@ -48,10 +48,10 @@ get end ip
 get string cidr as "50.165.190.0/23"
 
 ### .toRange([options])  
-get array of start and end ip [startIp, endIp]
+get an array of start and end ip [startIp, endIp]
 
 ### .toObject([options])   
-get object of start and end ip {start: startIp, end: endIp}
+get an object of start and end ip {start: startIp, end: endIp}
 
 ### .toArray([options], [results])  
 get an array of all ip in CIDR range  
