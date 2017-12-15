@@ -26,8 +26,8 @@ const fn = (ip) => {
 }
 
 cidr.arrayAction(fn, { asAddressObject: true });
-cidr.toArray({ asBigInteger: true }); // get array of all ip in CIDR range as big integer;
-cidr.toRange(); // get array of start and end ip as string [startIpAsString, endIpAsString]
+cidr.toArray({ asBigInteger: true }); // get an array of all ip in CIDR range as big integer;
+cidr.toRange(); // get an array of start and end ip as string [startIpAsString, endIpAsString]
 ```
 
 ## Client side
