@@ -59,6 +59,10 @@ you can get an information by chunks using options.from and options.limit
 this options might be an integer or a big integer("jsbn" instance)  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
+## .toRefactoredArray([allowed], [options])
+get an array of all ip in CIDR range, refactored into the least amount of blocks defined by allowed.
+example: AWS WAF only allows `[8,16,24,32]`, using this function you can convert `x.x.x.x/20` into 16 `x.x.x.x/24` CIDR Ranges
+
 ### .arrayAction(fn, [options], [results])  
 run fn for every element of CIDR range  
 you can use the same chunk options as in .toArray

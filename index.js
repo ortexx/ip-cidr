@@ -68,7 +68,7 @@ class IPCIDR {
     let length = end.subtract(start).add(new BigInteger('1'));
     let info = this.getChunkInfo(length, options);
 
-    if(results)  {
+    if (results) {
       Object.assign(results, info);
     }
 
@@ -81,7 +81,49 @@ class IPCIDR {
 
     return list;
   }
-  
+
+  toRefactoredArray(allowed = null, options = {}) {
+    if (!allowed) {
+      return this.formatIP(this.cidr, options);
+    }
+
+    if (allowed.indexOf(32) === -1) allowed.push(32);
+    allowed = allowed.sort((a, b) => (a - b)).reverse();
+
+    const all = this.toArray();
+    const list = [];
+    while (all.length) {
+
+      let mask = 32;
+      let decimal = 1;
+
+      const allowedCopy = JSON.parse(JSON.stringify(allowed));
+      while (allowedCopy.length) {
+        const maxMask = allowedCopy.pop();
+        const maxDecimal = Math.pow(2, 32 - maxMask);
+
+        if (all.length >= maxDecimal) {
+          decimal = maxDecimal;
+          mask = maxMask;
+          break;
+        }
+      }
+
+      if (Object.keys(options).length) {
+        const cidr = `${all[0]}/${mask}`;
+        let ipAddressType = cidr.match(":") ? ipAddress.Address6 : ipAddress.Address4;
+        let address = new ipAddressType(cidr);
+        list.push(this.formatIP(address, options));
+      } else {
+        list.push(`${all[0]}/${mask}`);
+      }
+
+      all.splice(0, decimal);
+    }
+
+    return list;
+  }
+
   arrayAction(fn, options, results) {
     options = options || {};
 
@@ -91,7 +133,7 @@ class IPCIDR {
     let length = end.subtract(start).add(new BigInteger('1'));
     let info = this.getChunkInfo(length, options);
 
-    if(results)  {
+    if (results) {
       Object.assign(results, info);
     }
 
@@ -108,8 +150,8 @@ class IPCIDR {
   getChunkInfo(length, options) {
     let from, limit, to, maxLength;
 
-    if(options.from !== undefined) {
-      if(typeof options.from != 'object') {
+    if (options.from !== undefined) {
+      if (typeof options.from != 'object') {
         from = new BigInteger(options.from + '');
       }
     }
@@ -117,8 +159,8 @@ class IPCIDR {
       from = new BigInteger('0');
     }
 
-    if(options.limit !== undefined) {
-      if(typeof options.limit != 'object') {
+    if (options.limit !== undefined) {
+      if (typeof options.limit != 'object') {
         limit = new BigInteger(options.limit + '');
       }
     }
@@ -127,11 +169,11 @@ class IPCIDR {
     }
 
     maxLength = length.subtract(from);
-    
-    if(limit.compareTo(maxLength) > 0) {
+
+    if (limit.compareTo(maxLength) > 0) {
       limit = maxLength;
     }
-    
+
     to = from.add(limit);
 
     return {
