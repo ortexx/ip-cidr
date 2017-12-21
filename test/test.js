@@ -21,6 +21,27 @@ let validRange = [
 
 let invalidCIDR = 'invalid';
 
+let validCIDRRefactor = '5.5.5.0/20';
+let allowedRefactored = [8,16,24,32];
+let validRefactored = [
+  '5.5.0.0/24', // Note the .0.0, Is this a special case? Other IPs don't cause this.
+  '5.5.1.0/24',
+  '5.5.2.0/24',
+  '5.5.3.0/24',
+  '5.5.4.0/24',
+  '5.5.5.0/24',
+  '5.5.6.0/24',
+  '5.5.7.0/24',
+  '5.5.8.0/24',
+  '5.5.9.0/24',
+  '5.5.10.0/24',
+  '5.5.11.0/24',
+  '5.5.12.0/24',
+  '5.5.13.0/24',
+  '5.5.14.0/24',
+  '5.5.15.0/24'
+];
+
 describe('IPCIDR:', function () {
   describe('check validity:', function () {
     it('should be valid', function () {
@@ -106,10 +127,19 @@ describe('IPCIDR:', function () {
       let options = {from: 3, limit: 10 };
 
       let array = cidr.toArray(options, results);
-      
+
       assert.equal(results.from.intValue(), options.from);
       assert.equal(results.to.intValue(), results.length.intValue());
       assert.equal(array.length, 5);
+    });
+  });
+
+  describe("#toRefactoredArray()", function () {
+    it('should return the expanded array of smaller cidr', function () {
+      let cidr = new IPCIDR(validCIDRRefactor);
+      let array = cidr.toRefactoredArray(allowedRefactored, {});
+
+      assert.equal(JSON.stringify(array), JSON.stringify(validRefactored));
     });
   });
 
