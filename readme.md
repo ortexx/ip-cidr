@@ -7,8 +7,8 @@ Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/
 # Example  
 
 ```js
-const CIDR = require("ip-cidr");
-const cidr = new CIDR("50.165.190.0/23"); 
+const IPCIDR = require("ip-cidr");
+const cidr = new IPCIDR("50.165.190.0/23"); 
 
 if(!cidr.isValid()) {
   // do something 
