@@ -2,32 +2,32 @@
 `npm install ip-cidr`
 
 # About  
-Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/beaugunderson/ip-address)
+Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/beaugunderson/ip-address).
 
 # Example  
 
 ```js
 const CIDR = require("ip-cidr");
-
-let cidr = new CIDR("50.165.190.0/23"); 
+const cidr = new CIDR("50.165.190.0/23"); 
 
 if(!cidr.isValid()) {
-    // something 
+  // do something 
 }
 
-cidr.start(); // get start ip as string
-cidr.end({ asBigInteger: true }); // get end ip as big integer
+// get start ip as string
+cidr.start(); 
 
-let data = [];
+// get end ip as big integer
+cidr.end({ type: "bigInteger" }); 
 
-const fn = (ip) => {
-    // do something with each element of CIDR range    
-    data.push(ip) // ip is "ip-address" module object, because of option asAddressObject is true 
-}
+// do something with each element of CIDR range  
+cidr.loop(ip => console.log(ip), { type: "addressObject" });
 
-cidr.arrayAction(fn, { asAddressObject: true });
-cidr.toArray({ asBigInteger: true }); // get an array of all ip in CIDR range as big integer;
-cidr.toRange(); // get an array of start and end ip as string [startIpAsString, endIpAsString]
+// get an array of all ip in CIDR range as big integer;
+cidr.toArray({ type: "bigInteger" }); 
+
+// get an array of start and end ip as string [startIpAsString, endIpAsString]
+cidr.toRange(); 
 ```
 
 ## Client side
@@ -36,7 +36,7 @@ Load __/dist/ip-cidr.js__ as script and get the library in __window.IPCIDR__
 # API  
 ### .formatIP(address, [options])  
 returns "ip-address" module object in the necessary format  
-options are the same in all of the library functions and might include asBigInteger, asAddressObject or asString (by default)
+options are the same in all of the library functions.
 
 ### .start([options])  
 get start ip
@@ -59,7 +59,7 @@ you can get an information by chunks using options.from and options.limit
 this options might be an integer or a big integer("jsbn" instance)  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
-### .arrayAction(fn, [options], [results])  
+### .loop(fn, [options], [results])  
 run fn for every element of CIDR range  
 you can use the same chunk options as in .toArray
 

@@ -27,10 +27,10 @@ class IPCIDR {
   formatIP(address, options) {
     options = options || {};
 
-    if (options.asBigInteger) {
+    if (options.type == "bigInteger") {
       return address.bigInteger();
     }
-    else if (options.asAddressObject) {
+    else if (options.type == "addressObject") {
       return address;
     }
 
@@ -83,7 +83,7 @@ class IPCIDR {
     return list;
   }
   
-  arrayAction(fn, options, results) {
+  loop(fn, options, results) {
     options = options || {};
 
     let promise = [];
