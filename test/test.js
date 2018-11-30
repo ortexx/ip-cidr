@@ -2,6 +2,8 @@
 
 const assert = require('chai').assert;
 const IPCIDR = require('../index');
+const BigInteger = require('jsbn').BigInteger;
+const ipAddress = require('ip-address');
 
 let validCIDR = '5.5.5.8/29';
 let validCIDRClear = '5.5.5.8';
@@ -38,6 +40,7 @@ describe('IPCIDR:', function () {
     it('check as string', function () {
       let cidr = new IPCIDR(validCIDR);
       assert.equal(cidr.formatIP(cidr.address), validCIDRClear);
+      const ipAddress = require('ip-address');
     });
 
     it('check as big integer', function () {
@@ -48,6 +51,44 @@ describe('IPCIDR:', function () {
     it('check as object', function () {
       let cidr = new IPCIDR(validCIDR);
       assert.strictEqual(cidr.address, cidr.formatIP(cidr.address, { type: "addressObject" }));
+    });
+  });
+
+  describe(".contains()", function () {
+    describe("check as string", function () {
+      it('should be true', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isTrue(cidr.contains('5.5.5.15'));      
+      });
+
+      it('should be false', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isFalse(cidr.contains('5.5.5.16'));      
+      });
+    });
+
+    describe("check as big integer", function () {
+      it('should be true', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isTrue(cidr.contains(new BigInteger('84215055')));      
+      });
+
+      it('should be false', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isFalse(cidr.contains(new BigInteger('84215056')));      
+      });
+    });
+
+    describe("check as object", function () {
+      it('should be true', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isTrue(cidr.contains(new ipAddress.Address4('5.5.5.15')));      
+      });
+
+      it('should be false', function () {
+        let cidr = new IPCIDR(validCIDR);
+        assert.isFalse(cidr.contains(new ipAddress.Address4('5.5.5.16')));      
+      });
     });
   });
 

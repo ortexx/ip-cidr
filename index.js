@@ -5,7 +5,7 @@ const BigInteger = require('jsbn').BigInteger;
 
 class IPCIDR {
   constructor(cidr) {
-    let ipAddressType = cidr.match(":") ? ipAddress.Address6 : ipAddress.Address4;
+    let ipAddressType = cidr.match(":")? ipAddress.Address6: ipAddress.Address4;
     let address = new ipAddressType(cidr);
 
     this._isValid = address.isValid();
@@ -34,6 +34,19 @@ class IPCIDR {
     }
 
     return address.addressMinusSuffix;
+  }
+
+  contains(address) {
+    if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
+      if(typeof address == 'object') {
+        address = this.ipAddressType.fromBigInteger(address);
+      }
+      else {
+        address = new this.ipAddressType(address);
+      }
+    }
+    
+    return address.isInSubnet(this.address)
   }
 
   start(options) {

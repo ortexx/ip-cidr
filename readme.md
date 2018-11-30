@@ -38,6 +38,9 @@ Load __/dist/ip-cidr.js__ as script and get the library in __window.IPCIDR__
 returns "ip-address" module object in the necessary format  
 options are the same in all of the library functions.
 
+### .contains(address)  
+check the address belongs to cidr
+
 ### .start([options])  
 get start ip
 
