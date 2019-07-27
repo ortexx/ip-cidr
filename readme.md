@@ -11,60 +11,59 @@ const IPCIDR = require("ip-cidr");
 const cidr = new IPCIDR("50.165.190.0/23"); 
 
 if(!cidr.isValid()) {
-  // do something 
+  throw new Error('CIDR is invalid');
 }
 
-// get start ip as string
+// get start ip address as a string
 cidr.start(); 
 
-// get end ip as big integer
+// get end ip address as a big integer
 cidr.end({ type: "bigInteger" }); 
 
-// do something with each element of CIDR range  
+// do something with each element of the range  
 cidr.loop(ip => console.log(ip), { type: "addressObject" });
 
-// get an array of all ip in CIDR range as big integer;
+// get an array of all ip addresses in the range as a big integer;
 cidr.toArray({ type: "bigInteger" }); 
 
-// get an array of start and end ip as string [startIpAsString, endIpAsString]
+// get an array of start and end ip addresses as a string [startIpAsString, endIpAsString]
 cidr.toRange(); 
 ```
 
 ## Client side
-Load __/dist/ip-cidr.js__ as script and get the library in __window.IPCIDR__
+Load __/dist/ip-cidr.js__ as a script and you can get the library in __window.IPCIDR__
 
 # API  
 ### .formatIP(address, [options])  
-returns "ip-address" module object in the necessary format  
-options are the same in all of the library functions.
+to return an "ip-address" module object in the necessary format 
 
 ### .contains(address)  
-check the address belongs to cidr
+to check the address belongs to the range
 
 ### .start([options])  
-get start ip
+to get the start ip adress
 
 ### .end([options])  
-get end ip
+to get the end ip address
 
 ### .toString()   
-get string cidr as "50.165.190.0/23"
+to convert the cidr to a string like "50.165.190.0/23"
 
 ### .toRange([options])  
-get an array of start and end ip [startIp, endIp]
+to convert the cidr to an array with start and end ip addresses [startIp, endIp]
 
 ### .toObject([options])   
-get an object of start and end ip {start: startIp, end: endIp}
+to convert the cidr to an object with start and end ip addresses {start: startIp, end: endIp}
 
 ### .toArray([options], [results])  
-get an array of all ip in CIDR range  
-you can get an information by chunks using options.from and options.limit  
-this options might be an integer or a big integer("jsbn" instance)  
+to convert the cidr to an array with all ip addresses in the range  
+you can get information by chunks using **options.__from** and **options.limit**  
+the options might be an integer or a big integer("jsbn" instance)  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
 ### .loop(fn, [options], [results])  
-run fn for every element of CIDR range  
-you can use the same chunk options as in .toArray
+to run __fn__ for each element of the range  
+you can use the same chunk options as in __.toArray()__
 
 
 
