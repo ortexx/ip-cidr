@@ -57,7 +57,7 @@ to convert the cidr to an object with start and end ip addresses {start: startIp
 
 ### .toArray([options], [results])  
 to convert the cidr to an array with all ip addresses in the range  
-you can get information by chunks using **options.__from** and **options.limit**  
+you can get information by chunks using **options.from** and **options.limit**  
 the options might be an integer or a big integer("jsbn" instance)  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
