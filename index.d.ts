@@ -1,49 +1,48 @@
-export = ipcidr;
-export as namespace ipcidr;
+import { Address4, Address6 } from "ip-address";
+import { BigInteger } from "jsbn";
 
-import {Address4, Address6} from "ip-address";
-import {BigInteger} from "jsbn";
+declare class IPCIDR {
+  constructor(cidr: string);
 
-declare namespace ipcidr {
-    type Address = Address4 | Address6;
-    type FormatResult = BigInteger | Address | string;
+  formatIP<T = IPCIDR.FormatResult>(address: IPCIDR.Address, options?: any): T;
 
-    interface FormatOptions {
-        type: "bigInteger" | "addressObject",
-        from: number | BigInteger;
-        limit: number | BigInteger;
-    }
+  start<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): T;
 
-    interface ChunkInfo {
-        from: BigInteger;
-        to: BigInteger;
-        limit: number;
-        length: number;
-    }
+  end<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): T;
 
-    interface IPCIDR {
-        constructor(cidr: string): IPCIDR;
+  toRange<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): [T, T];
 
-        formatIP<T = FormatResult>(address: Address, options?: any): T;
+  loop<T = IPCIDR.FormatResult, R = any>(fn: (ip: T) => Promise<R>, options: IPCIDR.FormatOptions, results?: IPCIDR.ChunkInfo): Promise<R>[];
 
-        start<T = FormatResult>(options?: FormatOptions): T;
+  getChunkInfo(length: number, options: IPCIDR.FormatOptions): IPCIDR.ChunkInfo;
 
-        end<T = FormatResult>(options?: FormatOptions): T;
+  contains(address: IPCIDR.Address | string): boolean;
 
-        toRange<T = FormatResult>(options?: FormatOptions): [T, T];
+  isValid(): boolean;
 
-        loop<T = FormatResult, R = any>(fn: (ip: T) => Promise<R>, options: FormatOptions, results?: ChunkInfo): Promise<R>[];
+  toString(): string;
 
-        getChunkInfo(length: number, options: FormatOptions): ChunkInfo;
+  toArray(): string[];
 
-        contains(address: Address | string): boolean;
-
-        isValid(): boolean;
-
-        toString(): string;
-
-        toArray(): string[];
-
-        toObject(): { start: string, end: string };
-    }
+  toObject(): { start: string, end: string };
 }
+
+declare namespace IPCIDR {
+  type Address = Address4 | Address6;
+  type FormatResult = BigInteger | Address | string;
+
+  interface FormatOptions {
+    type: "bigInteger" | "addressObject",
+    from: number | BigInteger;
+    limit: number | BigInteger;
+  }
+
+  interface ChunkInfo {
+    from: BigInteger;
+    to: BigInteger;
+    limit: number;
+    length: number;
+  }
+}
+
+export = IPCIDR;
