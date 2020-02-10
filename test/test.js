@@ -133,7 +133,7 @@ describe('IPCIDR:', function () {
     it('should return a part of the range', function () {
       let cidr = new IPCIDR(validCIDR);
       let results = {};
-      let options = {from: 3, limit: 10 };
+      let options = { from: 3, limit: new BigInteger('10') };
       let array = cidr.toArray(options, results);      
       assert.equal(results.from.intValue(), options.from);
       assert.equal(results.to.intValue(), results.length.intValue());

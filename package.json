@@ -1,6 +1,6 @@
 {
   "name": "ip-cidr",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "Module for working with CIDR (v4, v6)",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -21,7 +21,13 @@
     "test": "mocha",
     "build": "browserify ./ip-cidr.js > ./dist/ip-cidr.js"
   },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run test && npm run build"
+    }
+  },
   "dependencies": {
+    "husky": "^4.2.1",
     "ip-address": "^5.9.4",
     "jsbn": "^0.1.0"
   },

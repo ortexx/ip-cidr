@@ -74,7 +74,6 @@ class IPCIDR {
 
   toArray(options, results) {
     options = options || {};
-
     let list = [];
     let start = this.addressStart.bigInteger();
     let end = this.addressEnd.bigInteger();
@@ -85,12 +84,11 @@ class IPCIDR {
       Object.assign(results, info);
     }
 
-    for (let i = info.from; i < info.to; i++) {
-      let num = start.add(new BigInteger(i + ''));
+    this.loopInfo(info, (val) => {
+      let num = start.add(val);
       let ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
-
       list.push(ip);
-    }
+    });
 
     return list;
   }
@@ -103,36 +101,46 @@ class IPCIDR {
     let end = this.addressEnd.bigInteger();
     let length = end.subtract(start).add(new BigInteger('1'));
     let info = this.getChunkInfo(length, options);
-
+    
     if(results)  {
       Object.assign(results, info);
     }
 
-    for (let i = info.from; i < info.to; i++) {
-      let num = start.add(new BigInteger(i + ''));
+    this.loopInfo(info, (val) => {
+      let num = start.add(val);
       let ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
-
       promise.push(fn(ip));
-    }
+    });
 
     return Promise.all(promise);
   }
 
-  getChunkInfo(length, options) {
-    let from, limit, to, maxLength;
+  loopInfo(info, fn) {
+    let i = info.from;
 
-    if(options.from !== undefined) {
-      if(typeof options.from != 'object') {
-        from = new BigInteger(options.from + '');
+    while(i.compareTo(info.to) < 0) {
+      fn(i);
+      i = i.add(new BigInteger('1'));
+    }
+  }
+
+  getChunkInfo(length, options) {
+    let from = options.from;
+    let limit = options.limit
+    let to, maxLength;
+
+    if(from !== undefined) {
+      if(typeof from != 'object') {
+        from = new BigInteger(from + '');
       }
     }
     else {
       from = new BigInteger('0');
     }
 
-    if(options.limit !== undefined) {
-      if(typeof options.limit != 'object') {
-        limit = new BigInteger(options.limit + '');
+    if(limit !== undefined) {
+      if(typeof limit != 'object') {
+        limit = new BigInteger(limit + '');
       }
     }
     else {
