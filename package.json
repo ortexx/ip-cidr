@@ -1,6 +1,6 @@
 {
   "name": "ip-cidr",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "Module for working with CIDR (v4, v6)",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -36,7 +36,7 @@
     "@types/jsbn": "^1.2.29",
     "browserify": "^14.5.0",
     "chai": "^3.5.0",
-    "mocha": "^6.2.0"
+    "mocha": "^7.1.1"
   },
   "repository": {
     "type": "git",
