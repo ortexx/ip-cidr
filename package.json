@@ -27,7 +27,6 @@
     }
   },
   "dependencies": {
-    "husky": "^4.2.1",
     "ip-address": "^5.9.4",
     "jsbn": "^0.1.0"
   },
@@ -36,6 +35,7 @@
     "@types/jsbn": "^1.2.29",
     "browserify": "^14.5.0",
     "chai": "^3.5.0",
+    "husky": "4.2.3",
     "mocha": "^7.1.1"
   },
   "repository": {
