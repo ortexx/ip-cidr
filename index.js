@@ -5,18 +5,25 @@ const BigInteger = require('jsbn').BigInteger;
 
 class IPCIDR {
   constructor(cidr) {
+    if(typeof cidr !== 'string') {
+      this._isValid = false;
+      return;
+    }
+
+    cidr.match(/:.\./) && (cidr = cidr.split(':').pop());
     let ipAddressType = cidr.match(":")? ipAddress.Address6: ipAddress.Address4;
     let address = new ipAddressType(cidr);
-
     this._isValid = address.isValid();
 
-    if (this._isValid) {
-      this.cidr = cidr;
-      this.ipAddressType = ipAddressType;
-      this.address = address;
-      this.addressStart = address.startAddress();
-      this.addressEnd = address.endAddress();
+    if (!this._isValid) {
+      return;
     }
+
+    this.cidr = cidr;
+    this.ipAddressType = ipAddressType;
+    this.address = address;
+    this.addressStart = address.startAddress();
+    this.addressEnd = address.endAddress();
   }
 
   isValid() {
