@@ -23,8 +23,10 @@ class IPCIDR {
     this.cidr = cidr;
     this.ipAddressType = ipAddressType;
     this.address = address;
-    this.addressStart = address.startAddress();
+    this.addressStart = address.startAddress();    
     this.addressEnd = address.endAddress();
+    this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
+    this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
   }
 
   isValid() {
