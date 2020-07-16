@@ -22,8 +22,6 @@ let validRange = [
   '5.5.5.15'
 ];
 
-let invalidCIDR = 'invalid';
-
 describe('IPCIDR:', function () {
   describe('check validity:', function () {
     it('should be valid', function () {
@@ -47,7 +45,7 @@ describe('IPCIDR:', function () {
     });
 
     it('should be invalid', function () {
-      let cidr = new IPCIDR(invalidCIDR);
+      let cidr = new IPCIDR('192.168.1.1');
       assert.isNotOk(cidr.isValid());
     });
   });
