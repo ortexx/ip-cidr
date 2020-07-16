@@ -14,7 +14,7 @@ class IPCIDR {
     cidr.match(/:.\./) && (cidr = cidr.split(':').pop());
     let ipAddressType = cidr.match(":")? ipAddress.Address6: ipAddress.Address4;
     let address = new ipAddressType(cidr);
-    this._isValid = address.isValid() && cidr.match('/');
+    this._isValid = !!(address.isValid() && cidr.match('/'));
 
     if (!this._isValid) {
       return;

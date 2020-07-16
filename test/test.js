@@ -26,19 +26,19 @@ describe('IPCIDR:', function () {
   describe('check validity:', function () {
     it('should be valid', function () {
       let cidr = new IPCIDR(validCIDR);
-      assert.isOk(cidr.isValid());
+      assert.isTrue(cidr.isValid());
     });
 
     it('should be valid v6', function () {
       let cidr = new IPCIDR('2001:db8::/120');
-      assert.isOk(cidr.isValid(), 'check the status');      
+      assert.isTrue(cidr.isValid(), 'check the status');      
       assert.equal(cidr.addressStart.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:0000', 'check the start');      
       assert.equal(cidr.addressEnd.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:00ff', 'check the end');      
     });
 
     it('should be valid mapped cidr', function () {
       let cidr = new IPCIDR('::FFFF:' + validCIDRMapped);
-      assert.isOk(cidr.isValid(), 'check the status');      
+      assert.isTrue(cidr.isValid(), 'check the status');      
       assert.equal(cidr.addressStart.addressMinusSuffix, validCIDRStart, 'check the start');      
       assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');     
 
@@ -46,7 +46,7 @@ describe('IPCIDR:', function () {
 
     it('should be invalid', function () {
       let cidr = new IPCIDR('192.168.1.1');
-      assert.isNotOk(cidr.isValid());
+      assert.isFalse(cidr.isValid());
     });
   });
 
