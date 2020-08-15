@@ -33,15 +33,16 @@ declare namespace IPCIDR {
 
   interface FormatOptions {
     type: "bigInteger" | "addressObject",
-    from: number | BigInteger;
+    from: string | number | BigInteger;
+    to: string | number | BigInteger;
     limit: number | BigInteger;
   }
 
   interface ChunkInfo {
     from: BigInteger;
     to: BigInteger;
-    limit: number;
-    length: number;
+    limit: BigInteger;
+    length: BigInteger;
   }
 }
 

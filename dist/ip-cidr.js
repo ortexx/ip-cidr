@@ -4,6 +4,12 @@
 const ipAddress = require('ip-address');
 const BigInteger = require('jsbn').BigInteger;
 
+function createAddress(val) {
+  val.match(/:.\./) && (val = val.split(':').pop());
+  const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
+  return new ipAddressType(val);
+}
+
 class IPCIDR {
   constructor(cidr) {
     if(typeof cidr !== 'string') {
@@ -11,17 +17,15 @@ class IPCIDR {
       return;
     }
 
-    cidr.match(/:.\./) && (cidr = cidr.split(':').pop());
-    let ipAddressType = cidr.match(":")? ipAddress.Address6: ipAddress.Address4;
-    let address = new ipAddressType(cidr);
+    const address = createAddress(cidr);
     this._isValid = !!(address.isValid() && cidr.match('/'));
 
     if (!this._isValid) {
       return;
     }
 
-    this.cidr = cidr;
-    this.ipAddressType = ipAddressType;
+    this.cidr = address.address;
+    this.ipAddressType = address.constructor;
     this.address = address;
     this.addressStart = address.startAddress();    
     this.addressEnd = address.endAddress();
@@ -84,19 +88,19 @@ class IPCIDR {
 
   toArray(options, results) {
     options = options || {};
-    let list = [];
-    let start = this.addressStart.bigInteger();
-    let end = this.addressEnd.bigInteger();
-    let length = end.subtract(start).add(new BigInteger('1'));
-    let info = this.getChunkInfo(length, options);
+    const list = [];
+    const start = this.addressStart.bigInteger();
+    const end = this.addressEnd.bigInteger();
+    const length = end.subtract(start).add(new BigInteger('1'));
+    const info = this.getChunkInfo(length, options);
 
     if(results)  {
       Object.assign(results, info);
     }
 
     this.loopInfo(info, (val) => {
-      let num = start.add(val);
-      let ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const num = start.add(val);
+      const ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
       list.push(ip);
     });
 
@@ -105,20 +109,19 @@ class IPCIDR {
   
   loop(fn, options, results) {
     options = options || {};
-
-    let promise = [];
-    let start = this.addressStart.bigInteger();
-    let end = this.addressEnd.bigInteger();
-    let length = end.subtract(start).add(new BigInteger('1'));
-    let info = this.getChunkInfo(length, options);
+    const promise = [];
+    const start = this.addressStart.bigInteger();
+    const end = this.addressEnd.bigInteger();
+    const length = end.subtract(start).add(new BigInteger('1'));
+    const info = this.getChunkInfo(length, options);
     
     if(results)  {
       Object.assign(results, info);
     }
 
     this.loopInfo(info, (val) => {
-      let num = start.add(val);
-      let ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const num = start.add(val);
+      const ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
       promise.push(fn(ip));
     });
 
@@ -136,26 +139,31 @@ class IPCIDR {
 
   getChunkInfo(length, options) {
     let from = options.from;
-    let limit = options.limit
-    let to, maxLength;
+    let limit = options.limit;
+    let to = options.to;
+    let maxLength;
+    const addressBigInteger = this.address.bigInteger();
 
-    if(from !== undefined) {
-      if(typeof from != 'object') {
-        from = new BigInteger(from + '');
+    function getBigInteger(val) {
+      if(typeof val == 'string' && val.match(/:|\./)) {
+        return createAddress(val).bigInteger().subtract(addressBigInteger);
       }
+      else if(typeof val != 'object') {
+        return new BigInteger(val + '');
+      }
+
+      return val;
+    }
+
+    from = getBigInteger(from !== undefined? from: 0);
+
+    if(to !== undefined) {
+      to = getBigInteger(to);
+      limit = to.subtract(from);
     }
     else {
-      from = new BigInteger('0');
-    }
-
-    if(limit !== undefined) {
-      if(typeof limit != 'object') {
-        limit = new BigInteger(limit + '');
-      }
-    }
-    else {
-      limit = length;
-    }
+      limit = limit !== undefined? getBigInteger(limit): length;
+    }   
 
     maxLength = length.subtract(from);
     
@@ -164,7 +172,6 @@ class IPCIDR {
     }
     
     to = from.add(limit);
-
     return {
       from: from,
       to: to,

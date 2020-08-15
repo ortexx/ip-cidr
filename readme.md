@@ -8,6 +8,7 @@ Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/
 
 ```js
 const IPCIDR = require("ip-cidr");
+const BigInteger = require("jsbn").BigInteger;
 const cidr = new IPCIDR("50.165.190.0/23"); 
 
 if(!cidr.isValid()) {
@@ -25,6 +26,13 @@ cidr.loop(ip => console.log(ip), { type: "addressObject" });
 
 // get an array of all ip addresses in the range as a big integer;
 cidr.toArray({ type: "bigInteger" }); 
+
+// get an array by chunks using from/limit
+cidr.toArray({ from: 1, limit: new BigInteger('2') });
+
+// get an array by chunks using from/to
+cidr.toArray({ from: new BigInteger('1'), to: 3 });
+cidr.toArray({ from: '50.165.190.1', to: '50.165.190.3' });
 
 // get an array of start and end ip addresses as a string [startIpAsString, endIpAsString]
 cidr.toRange(); 
@@ -57,8 +65,7 @@ to convert the cidr to an object with start and end ip addresses {start: startIp
 
 ### .toArray([options], [results])  
 to convert the cidr to an array with all ip addresses in the range  
-you can get information by chunks using **options.from** and **options.limit**  
-the options might be an integer or a big integer("jsbn" instance)  
+you can get information by chunks using **options.from/options.limit** or **options.from/options.to**  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
 ### .loop(fn, [options], [results])  
