@@ -32,7 +32,7 @@ declare namespace IPCIDR {
   type FormatResult = BigInteger | Address | string;
 
   interface FormatOptions {
-    type: "bigInteger" | "addressObject",
+    type?: "bigInteger" | "addressObject",
     from?: string | number | BigInteger;
     to?: string | number | BigInteger;
     limit?: number | BigInteger;
