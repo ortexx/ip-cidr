@@ -33,9 +33,9 @@ declare namespace IPCIDR {
 
   interface FormatOptions {
     type: "bigInteger" | "addressObject",
-    from: string | number | BigInteger;
-    to: string | number | BigInteger;
-    limit: number | BigInteger;
+    from?: string | number | BigInteger;
+    to?: string | number | BigInteger;
+    limit?: number | BigInteger;
   }
 
   interface ChunkInfo {
