@@ -40,7 +40,7 @@ class IPCIDR {
     options = options || {};
 
     if (options.type == "bigInteger") {
-      return address.bigInteger();
+      return new BigInteger(address.bigInteger().toString());
     }
     else if (options.type == "addressObject") {
       return address;
@@ -88,8 +88,8 @@ class IPCIDR {
   toArray(options, results) {
     options = options || {};
     const list = [];
-    const start = this.addressStart.bigInteger();
-    const end = this.addressEnd.bigInteger();
+    const start = this.formatIP(this.addressStart, { type: 'bigInteger' });
+    const end = this.formatIP(this.addressEnd, { type: 'bigInteger' });
     const length = end.subtract(start).add(new BigInteger('1'));
     const info = this.getChunkInfo(length, options);
 
@@ -109,8 +109,8 @@ class IPCIDR {
   loop(fn, options, results) {
     options = options || {};
     const promise = [];
-    const start = this.addressStart.bigInteger();
-    const end = this.addressEnd.bigInteger();
+    const start = this.formatIP(this.addressStart, { type: 'bigInteger' });
+    const end = this.formatIP(this.addressEnd, { type: 'bigInteger' });
     const length = end.subtract(start).add(new BigInteger('1'));
     const info = this.getChunkInfo(length, options);
     
@@ -141,11 +141,11 @@ class IPCIDR {
     let limit = options.limit;
     let to = options.to;
     let maxLength;
-    const addressBigInteger = this.address.bigInteger();
+    const addressBigInteger = this.formatIP(this.address, { type: 'bigInteger' });
 
-    function getBigInteger(val) {
+    const getBigInteger = (val) => {
       if(typeof val == 'string' && val.match(/:|\./)) {
-        return createAddress(val).bigInteger().subtract(addressBigInteger);
+        return this.formatIP(createAddress(val), { type: 'bigInteger' }).subtract(addressBigInteger);
       }
       else if(typeof val != 'object') {
         return new BigInteger(val + '');

@@ -58,7 +58,7 @@ describe('IPCIDR:', function () {
 
     it('check as big integer', function () {
       const cidr = new IPCIDR(validCIDR);
-      assert.equal(JSON.stringify(cidr.address.bigInteger()), JSON.stringify(cidr.formatIP(cidr.address, { type: "bigInteger" })));
+      assert.equal(JSON.stringify(cidr.formatIP(cidr.address, { type: 'bigInteger' })), JSON.stringify(cidr.formatIP(cidr.address, { type: "bigInteger" })));
     });
 
     it('check as object', function () {
