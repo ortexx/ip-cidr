@@ -1,6 +1,6 @@
 {
   "name": "ip-cidr",
-  "version": "2.1.4",
+  "version": "2.1.6",
   "description": "Module for working with CIDR (v4, v6)",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -27,11 +27,10 @@
     }
   },
   "dependencies": {
-    "ip-address": "^6.3.0",
+    "ip-address": "^7.1.0",
     "jsbn": "^1.1.0"
   },
   "devDependencies": {
-    "@types/ip-address": "^5.8.2",
     "@types/jsbn": "^1.2.29",
     "browserify": "^14.5.0",
     "chai": "^3.5.0",

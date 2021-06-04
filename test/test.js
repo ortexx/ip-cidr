@@ -78,6 +78,16 @@ describe('IPCIDR:', function () {
         const cidr = new IPCIDR(validCIDR);
         assert.isFalse(cidr.contains('5.5.5.16'));      
       });
+
+      it('should be false with a random string', function () {
+        const cidr = new IPCIDR(validCIDR);
+        assert.isFalse(cidr.contains('hello'));
+      });
+
+      it('should be false with octal notation', function () {
+        const cidr = new IPCIDR('10.0.0.1/8');
+        assert.isFalse(cidr.contains('010.1.1.1'));
+      });      
     });
 
     describe("check as big integer", function () {

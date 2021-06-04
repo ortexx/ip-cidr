@@ -4,21 +4,42 @@ const ipAddress = require('ip-address');
 const BigInteger = require('jsbn').BigInteger;
 
 function createAddress(val) {
+  if(typeof val !== 'string') {
+    throw new Error('Invalid IP address.');
+  }
+
   val.match(/:.\./) && (val = val.split(':').pop());
   const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
+
+  if(ipAddressType === ipAddress.Address4) {
+    const parts = val.split('.');
+
+    for(let i = 0; i < parts.length; i++) {
+      if(parts[i][0] == '0') {
+        throw new Error('Invalid IPv4 address.');
+      }
+    }
+  }
+
   return new ipAddressType(val);
 }
 
 class IPCIDR {
   constructor(cidr) {
-    if(typeof cidr !== 'string') {
-      this._isValid = false;
-      return;
+    let address;
+
+    try {
+      if(typeof cidr !== 'string' || !cidr.match('/')) {
+        throw new Error('Invalid CIDR address.');
+      }
+
+      address = createAddress(cidr);
+      this._isValid = true;
     }
-
-    const address = createAddress(cidr);
-    this._isValid = !!(address.isValid() && cidr.match('/'));
-
+    catch(err){
+      this._isValid = false;
+    }
+    
     if (!this._isValid) {
       return;
     }
@@ -50,16 +71,21 @@ class IPCIDR {
   }
 
   contains(address) {
-    if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
-      if(typeof address == 'object') {
-        address = this.ipAddressType.fromBigInteger(address);
+    try {
+      if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
+        if(typeof address == 'object') {
+          address = this.ipAddressType.fromBigInteger(address);
+        }
+        else {
+          address = new this.ipAddressType(address);
+        }
       }
-      else {
-        address = new this.ipAddressType(address);
-      }
+
+      return address.isInSubnet(this.address)
     }
-    
-    return address.isInSubnet(this.address)
+    catch(err) {
+      return false;
+    }   
   }
 
   start(options) {
