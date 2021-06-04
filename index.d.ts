@@ -4,8 +4,6 @@ import { BigInteger } from "jsbn";
 declare class IPCIDR {
   constructor(cidr: string);
 
-  formatIP<T = IPCIDR.FormatResult>(address: IPCIDR.Address, options?: any): T;
-
   start<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): T;
 
   end<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): T;
@@ -16,9 +14,7 @@ declare class IPCIDR {
 
   getChunkInfo(length: number, options: IPCIDR.FormatOptions): IPCIDR.ChunkInfo;
 
-  contains(address: IPCIDR.Address | string): boolean;
-
-  isValid(): boolean;
+  contains(address: IPCIDR.Address | string | BigInteger): boolean;
 
   toString(): string;
 

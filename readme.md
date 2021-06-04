@@ -9,11 +9,13 @@ Module for working with CIDR (v4, v6). Based on [ip-address](https://github.com/
 ```js
 const IPCIDR = require("ip-cidr");
 const BigInteger = require("jsbn").BigInteger;
-const cidr = new IPCIDR("50.165.190.0/23"); 
+const address = "50.165.190.0/23";
 
-if(!cidr.isValid()) {
-  throw new Error('CIDR is invalid');
+if(!IPCIDR.isValidAddress(address)) {
+  return;
 }
+
+const cidr = new IPCIDR(address); 
 
 // get start ip address as a string
 cidr.start(); 
@@ -45,30 +47,36 @@ Load __/dist/ip-cidr.js__ as a script and you can get the library in __window.IP
 ### .formatIP(address, [options])  
 to return an "ip-address" module object in the necessary format 
 
-### .contains(address)  
+### .isValidAddress(address)  
+to check the address is valid or not
+
+### .createAddress(address)  
+to create an object address from the string
+
+### .prototype.contains(address)  
 to check the address belongs to the range
 
-### .start([options])  
-to get the start ip adress
+### .prototype.start([options])  
+to get the start ip address
 
-### .end([options])  
+### .prototype.end([options])  
 to get the end ip address
 
-### .toString()   
+### .prototype.toString()   
 to convert the cidr to a string like "50.165.190.0/23"
 
-### .toRange([options])  
+### .prototype.toRange([options])  
 to convert the cidr to an array with start and end ip addresses [startIp, endIp]
 
-### .toObject([options])   
+### .prototype.toObject([options])   
 to convert the cidr to an object with start and end ip addresses {start: startIp, end: endIp}
 
-### .toArray([options], [results])  
+### .prototype.toArray([options], [results])  
 to convert the cidr to an array with all ip addresses in the range  
 you can get information by chunks using **options.from/options.limit** or **options.from/options.to**  
 you can pass the second argument "results" (object) to get all chunk pagination information
 
-### .loop(fn, [options], [results])  
+### .prototype.loop(fn, [options], [results])  
 to run __fn__ for each element of the range  
 you can use the same chunk options as in __.toArray()__
 

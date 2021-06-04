@@ -4,26 +4,13 @@
 const ipAddress = require('ip-address');
 const BigInteger = require('jsbn').BigInteger;
 
-function createAddress(val) {
-  val.match(/:.\./) && (val = val.split(':').pop());
-  const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
-  return new ipAddressType(val);
-}
-
 class IPCIDR {
   constructor(cidr) {
-    if(typeof cidr !== 'string') {
-      this._isValid = false;
-      return;
+    if(typeof cidr !== 'string' || !cidr.match('/')) {
+      throw new Error('Invalid CIDR address.');
     }
 
-    const address = createAddress(cidr);
-    this._isValid = !!(address.isValid() && cidr.match('/'));
-
-    if (!this._isValid) {
-      return;
-    }
-
+    const address = this.constructor.createAddress(cidr);
     this.cidr = address.address;
     this.ipAddressType = address.constructor;
     this.address = address;
@@ -32,43 +19,31 @@ class IPCIDR {
     this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
     this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
   }
-
-  isValid() {
-    return this._isValid;
-  }
-
-  formatIP(address, options) {
-    options = options || {};
-
-    if (options.type == "bigInteger") {
-      return new BigInteger(address.bigInteger().toString());
-    }
-    else if (options.type == "addressObject") {
-      return address;
-    }
-
-    return address.addressMinusSuffix;
-  }
-
+  
   contains(address) {
-    if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
-      if(typeof address == 'object') {
-        address = this.ipAddressType.fromBigInteger(address);
+    try {
+      if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
+        if(typeof address == 'object') {
+          address = this.ipAddressType.fromBigInteger(address);
+        }
+        else {
+          address = this.constructor.createAddress(address);
+        }
       }
-      else {
-        address = new this.ipAddressType(address);
-      }
+
+      return address.isInSubnet(this.address)
     }
-    
-    return address.isInSubnet(this.address)
+    catch(err) {
+      return false;
+    }   
   }
 
   start(options) {
-    return this.formatIP(this.addressStart, options);
+    return this.constructor.formatIP(this.addressStart, options);
   }
 
   end(options) {
-    return this.formatIP(this.addressEnd, options);
+    return this.constructor.formatIP(this.addressEnd, options);
   }
 
   toString() {
@@ -76,21 +51,21 @@ class IPCIDR {
   }
 
   toRange(options) {
-    return [this.formatIP(this.addressStart, options), this.formatIP(this.addressEnd, options)];
+    return [this.constructor.formatIP(this.addressStart, options), this.constructor.formatIP(this.addressEnd, options)];
   }
 
   toObject(options) {
     return {
-      start: this.formatIP(this.addressStart, options),
-      end: this.formatIP(this.addressEnd, options)
+      start: this.constructor.formatIP(this.addressStart, options),
+      end: this.constructor.formatIP(this.addressEnd, options)
     };
   }
 
   toArray(options, results) {
     options = options || {};
     const list = [];
-    const start = this.formatIP(this.addressStart, { type: 'bigInteger' });
-    const end = this.formatIP(this.addressEnd, { type: 'bigInteger' });
+    const start = this.constructor.formatIP(this.addressStart, { type: 'bigInteger' });
+    const end = this.constructor.formatIP(this.addressEnd, { type: 'bigInteger' });
     const length = end.subtract(start).add(new BigInteger('1'));
     const info = this.getChunkInfo(length, options);
 
@@ -100,7 +75,7 @@ class IPCIDR {
 
     this.loopInfo(info, (val) => {
       const num = start.add(val);
-      const ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
       list.push(ip);
     });
 
@@ -110,8 +85,8 @@ class IPCIDR {
   loop(fn, options, results) {
     options = options || {};
     const promise = [];
-    const start = this.formatIP(this.addressStart, { type: 'bigInteger' });
-    const end = this.formatIP(this.addressEnd, { type: 'bigInteger' });
+    const start = this.constructor.formatIP(this.addressStart, { type: 'bigInteger' });
+    const end = this.constructor.formatIP(this.addressEnd, { type: 'bigInteger' });
     const length = end.subtract(start).add(new BigInteger('1'));
     const info = this.getChunkInfo(length, options);
     
@@ -121,7 +96,7 @@ class IPCIDR {
 
     this.loopInfo(info, (val) => {
       const num = start.add(val);
-      const ip = this.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
       promise.push(fn(ip));
     });
 
@@ -142,11 +117,11 @@ class IPCIDR {
     let limit = options.limit;
     let to = options.to;
     let maxLength;
-    const addressBigInteger = this.formatIP(this.address, { type: 'bigInteger' });
+    const addressBigInteger = this.constructor.formatIP(this.address, { type: 'bigInteger' });
 
     const getBigInteger = (val) => {
       if(typeof val == 'string' && val.match(/:|\./)) {
-        return this.formatIP(createAddress(val), { type: 'bigInteger' }).subtract(addressBigInteger);
+        return this.constructor.formatIP(this.constructor.createAddress(val), { type: 'bigInteger' }).subtract(addressBigInteger);
       }
       else if(typeof val != 'object') {
         return new BigInteger(val + '');
@@ -181,417 +156,515 @@ class IPCIDR {
   }
 }
 
-module.exports = IPCIDR;
+IPCIDR.formatIP = function(address, options) {
+  options = options || {};
 
-},{"ip-address":3,"jsbn":13}],2:[function(require,module,exports){
-window.IPCIDR = require('./index');
-},{"./index":1}],3:[function(require,module,exports){
-'use strict';
+  if (options.type == "bigInteger") {
+    return new BigInteger(address.bigInteger().toString());
+  }
+  else if (options.type == "addressObject") {
+    return address;
+  }
 
-exports.Address4 = require('./lib/ipv4.js');
-exports.Address6 = require('./lib/ipv6.js');
+  return address.addressMinusSuffix;
+}
 
-exports.v6 = {
-  helpers: require('./lib/v6/helpers.js')
-};
+IPCIDR.createAddress = function (val) {
+  if(typeof val !== 'string') {
+    throw new Error('Invalid IP address.');
+  }
 
-},{"./lib/ipv4.js":5,"./lib/ipv6.js":6,"./lib/v6/helpers.js":10}],4:[function(require,module,exports){
-'use strict';
+  val.match(/:.\./) && (val = val.split(':').pop());
+  const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
 
-// A wrapper function that returns false if the address is not valid; used to
-// avoid boilerplate checks for `if (!this.valid) { return false; }`
-var falseIfInvalid = exports.falseIfInvalid = function (fn) {
-  return function () {
-    if (!this.valid) {
-      return false;
+  if(ipAddressType === ipAddress.Address4) {
+    const parts = val.split('.');
+
+    for(let i = 0; i < parts.length; i++) {
+      const part = parts[i].split('/')[0];
+
+      if(part[0] == '0' && part.length > 1) {
+        throw new Error('Invalid IPv4 address.');
+      }
     }
+  }
 
-    return fn.apply(this, arguments);
-  };
-};
+  return new ipAddressType(val);
+}
 
-exports.isInSubnet = falseIfInvalid(function (address) {
-  if (this.subnetMask < address.subnetMask) {
+IPCIDR.isValidAddress = function (address) {
+  try {
+    return !!this.createAddress(address);
+  }
+  catch(err) {
     return false;
   }
+}
 
-  if (this.mask(address.subnetMask) === address.mask()) {
-    return true;
-  }
+module.exports = IPCIDR;
 
-  return false;
+},{"ip-address":3,"jsbn":12}],2:[function(require,module,exports){
+window.IPCIDR = require('./index');
+},{"./index":1}],3:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
 });
-
-exports.isCorrect = function (defaultBits) {
-  return falseIfInvalid(function () {
-    if (this.addressMinusSuffix !== this.correctForm()) {
-      return false;
-    }
-
-    if (this.subnetMask === defaultBits && !this.parsedSubnet) {
-      return true;
-    }
-
-    return this.parsedSubnet === String(this.subnetMask);
-  });
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
 };
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.v6 = exports.Address6 = exports.Address4 = void 0;
+var ipv4_1 = require("./lib/ipv4");
+Object.defineProperty(exports, "Address4", { enumerable: true, get: function () { return ipv4_1.Address4; } });
+var ipv6_1 = require("./lib/ipv6");
+Object.defineProperty(exports, "Address6", { enumerable: true, get: function () { return ipv6_1.Address6; } });
+var helpers = __importStar(require("./lib/v6/helpers"));
+exports.v6 = { helpers: helpers };
+
+},{"./lib/ipv4":6,"./lib/ipv6":7,"./lib/v6/helpers":10}],4:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.AddressError = void 0;
+var AddressError = /** @class */ (function (_super) {
+    __extends(AddressError, _super);
+    function AddressError(message, parseMessage) {
+        var _this = _super.call(this, message) || this;
+        _this.name = 'AddressError';
+        if (parseMessage !== null) {
+            _this.parseMessage = parseMessage;
+        }
+        return _this;
+    }
+    return AddressError;
+}(Error));
+exports.AddressError = AddressError;
 
 },{}],5:[function(require,module,exports){
-'use strict';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.isCorrect = exports.isInSubnet = void 0;
+function isInSubnet(address) {
+    if (this.subnetMask < address.subnetMask) {
+        return false;
+    }
+    if (this.mask(address.subnetMask) === address.mask()) {
+        return true;
+    }
+    return false;
+}
+exports.isInSubnet = isInSubnet;
+function isCorrect(defaultBits) {
+    return function () {
+        if (this.addressMinusSuffix !== this.correctForm()) {
+            return false;
+        }
+        if (this.subnetMask === defaultBits && !this.parsedSubnet) {
+            return true;
+        }
+        return this.parsedSubnet === String(this.subnetMask);
+    };
+}
+exports.isCorrect = isCorrect;
 
-var BigInteger = require('jsbn').BigInteger;
-var common = require('./common.js');
-var sprintf = require('sprintf-js').sprintf;
-var padStart = require('lodash.padstart');
-var repeat = require('lodash.repeat');
-
-var constants = require('./v4/constants.js');
-
+},{}],6:[function(require,module,exports){
+"use strict";
+/* eslint-disable no-param-reassign */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Address4 = void 0;
+var common = __importStar(require("./common"));
+var constants = __importStar(require("./v4/constants"));
+var address_error_1 = require("./address-error");
+var jsbn_1 = require("jsbn");
+var sprintf_js_1 = require("sprintf-js");
 /**
  * Represents an IPv4 address
  * @class Address4
  * @param {string} address - An IPv4 address string
  */
-function Address4(address) {
-  this.valid = false;
-  this.address = address;
-  this.groups = constants.GROUPS;
-
-  this.v4 = true;
-
-  this.subnet = '/32';
-  this.subnetMask = 32;
-
-  var subnet = constants.RE_SUBNET_STRING.exec(address);
-
-  if (subnet) {
-    this.parsedSubnet = subnet[0].replace('/', '');
-    this.subnetMask = parseInt(this.parsedSubnet, 10);
-    this.subnet = '/' + this.subnetMask;
-
-    if (this.subnetMask < 0 || this.subnetMask > constants.BITS) {
-      this.valid = false;
-      this.error = 'Invalid subnet mask.';
-
-      return;
+var Address4 = /** @class */ (function () {
+    function Address4(address) {
+        this.groups = constants.GROUPS;
+        this.parsedAddress = [];
+        this.parsedSubnet = '';
+        this.subnet = '/32';
+        this.subnetMask = 32;
+        this.v4 = true;
+        /**
+         * Returns true if the address is correct, false otherwise
+         * @memberof Address4
+         * @instance
+         * @returns {Boolean}
+         */
+        this.isCorrect = common.isCorrect(constants.BITS);
+        /**
+         * Returns true if the given address is in the subnet of the current address
+         * @memberof Address4
+         * @instance
+         * @returns {boolean}
+         */
+        this.isInSubnet = common.isInSubnet;
+        this.address = address;
+        var subnet = constants.RE_SUBNET_STRING.exec(address);
+        if (subnet) {
+            this.parsedSubnet = subnet[0].replace('/', '');
+            this.subnetMask = parseInt(this.parsedSubnet, 10);
+            this.subnet = "/" + this.subnetMask;
+            if (this.subnetMask < 0 || this.subnetMask > constants.BITS) {
+                throw new address_error_1.AddressError('Invalid subnet mask.');
+            }
+            address = address.replace(constants.RE_SUBNET_STRING, '');
+        }
+        this.addressMinusSuffix = address;
+        this.parsedAddress = this.parse(address);
     }
+    Address4.isValid = function (address) {
+        try {
+            // eslint-disable-next-line no-new
+            new Address4(address);
+            return true;
+        }
+        catch (e) {
+            return false;
+        }
+    };
+    /*
+     * Parses a v4 address
+     */
+    Address4.prototype.parse = function (address) {
+        var groups = address.split('.');
+        if (!address.match(constants.RE_ADDRESS)) {
+            throw new address_error_1.AddressError('Invalid IPv4 address.');
+        }
+        return groups;
+    };
+    /**
+     * Returns the correct form of an address
+     * @memberof Address4
+     * @instance
+     * @returns {String}
+     */
+    Address4.prototype.correctForm = function () {
+        return this.parsedAddress.map(function (part) { return parseInt(part, 10); }).join('.');
+    };
+    /**
+     * Converts a hex string to an IPv4 address object
+     * @memberof Address4
+     * @static
+     * @param {string} hex - a hex string to convert
+     * @returns {Address4}
+     */
+    Address4.fromHex = function (hex) {
+        var padded = hex.replace(/:/g, '').padStart(8, '0');
+        var groups = [];
+        var i;
+        for (i = 0; i < 8; i += 2) {
+            var h = padded.slice(i, i + 2);
+            groups.push(parseInt(h, 16));
+        }
+        return new Address4(groups.join('.'));
+    };
+    /**
+     * Converts an integer into a IPv4 address object
+     * @memberof Address4
+     * @static
+     * @param {integer} integer - a number to convert
+     * @returns {Address4}
+     */
+    Address4.fromInteger = function (integer) {
+        return Address4.fromHex(integer.toString(16));
+    };
+    /**
+     * Converts an IPv4 address object to a hex string
+     * @memberof Address4
+     * @instance
+     * @returns {String}
+     */
+    Address4.prototype.toHex = function () {
+        return this.parsedAddress.map(function (part) { return sprintf_js_1.sprintf('%02x', parseInt(part, 10)); }).join(':');
+    };
+    /**
+     * Converts an IPv4 address object to an array of bytes
+     * @memberof Address4
+     * @instance
+     * @returns {Array}
+     */
+    Address4.prototype.toArray = function () {
+        return this.parsedAddress.map(function (part) { return parseInt(part, 10); });
+    };
+    /**
+     * Converts an IPv4 address object to an IPv6 address group
+     * @memberof Address4
+     * @instance
+     * @returns {String}
+     */
+    Address4.prototype.toGroup6 = function () {
+        var output = [];
+        var i;
+        for (i = 0; i < constants.GROUPS; i += 2) {
+            var hex = sprintf_js_1.sprintf('%02x%02x', parseInt(this.parsedAddress[i], 10), parseInt(this.parsedAddress[i + 1], 10));
+            output.push(sprintf_js_1.sprintf('%x', parseInt(hex, 16)));
+        }
+        return output.join(':');
+    };
+    /**
+     * Returns the address as a BigInteger
+     * @memberof Address4
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address4.prototype.bigInteger = function () {
+        return new jsbn_1.BigInteger(this.parsedAddress.map(function (n) { return sprintf_js_1.sprintf('%02x', parseInt(n, 10)); }).join(''), 16);
+    };
+    /**
+     * Helper function getting start address.
+     * @memberof Address4
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address4.prototype._startAddress = function () {
+        return new jsbn_1.BigInteger(this.mask() + '0'.repeat(constants.BITS - this.subnetMask), 2);
+    };
+    /**
+     * The first address in the range given by this address' subnet.
+     * Often referred to as the Network Address.
+     * @memberof Address4
+     * @instance
+     * @returns {Address4}
+     */
+    Address4.prototype.startAddress = function () {
+        return Address4.fromBigInteger(this._startAddress());
+    };
+    /**
+     * The first host address in the range given by this address's subnet ie
+     * the first address after the Network Address
+     * @memberof Address4
+     * @instance
+     * @returns {Address4}
+     */
+    Address4.prototype.startAddressExclusive = function () {
+        var adjust = new jsbn_1.BigInteger('1');
+        return Address4.fromBigInteger(this._startAddress().add(adjust));
+    };
+    /**
+     * Helper function getting end address.
+     * @memberof Address4
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address4.prototype._endAddress = function () {
+        return new jsbn_1.BigInteger(this.mask() + '1'.repeat(constants.BITS - this.subnetMask), 2);
+    };
+    /**
+     * The last address in the range given by this address' subnet
+     * Often referred to as the Broadcast
+     * @memberof Address4
+     * @instance
+     * @returns {Address4}
+     */
+    Address4.prototype.endAddress = function () {
+        return Address4.fromBigInteger(this._endAddress());
+    };
+    /**
+     * The last host address in the range given by this address's subnet ie
+     * the last address prior to the Broadcast Address
+     * @memberof Address4
+     * @instance
+     * @returns {Address4}
+     */
+    Address4.prototype.endAddressExclusive = function () {
+        var adjust = new jsbn_1.BigInteger('1');
+        return Address4.fromBigInteger(this._endAddress().subtract(adjust));
+    };
+    /**
+     * Converts a BigInteger to a v4 address object
+     * @memberof Address4
+     * @static
+     * @param {BigInteger} bigInteger - a BigInteger to convert
+     * @returns {Address4}
+     */
+    Address4.fromBigInteger = function (bigInteger) {
+        return Address4.fromInteger(parseInt(bigInteger.toString(), 10));
+    };
+    /**
+     * Returns the first n bits of the address, defaulting to the
+     * subnet mask
+     * @memberof Address4
+     * @instance
+     * @returns {String}
+     */
+    Address4.prototype.mask = function (mask) {
+        if (mask === undefined) {
+            mask = this.subnetMask;
+        }
+        return this.getBitsBase2(0, mask);
+    };
+    /**
+     * Returns the bits in the given range as a base-2 string
+     * @memberof Address4
+     * @instance
+     * @returns {string}
+     */
+    Address4.prototype.getBitsBase2 = function (start, end) {
+        return this.binaryZeroPad().slice(start, end);
+    };
+    /**
+     * Returns true if the given address is a multicast address
+     * @memberof Address4
+     * @instance
+     * @returns {boolean}
+     */
+    Address4.prototype.isMulticast = function () {
+        return this.isInSubnet(new Address4('224.0.0.0/4'));
+    };
+    /**
+     * Returns a zero-padded base-2 string representation of the address
+     * @memberof Address4
+     * @instance
+     * @returns {string}
+     */
+    Address4.prototype.binaryZeroPad = function () {
+        return this.bigInteger().toString(2).padStart(constants.BITS, '0');
+    };
+    /**
+     * Groups an IPv4 address for inclusion at the end of an IPv6 address
+     * @returns {String}
+     */
+    Address4.prototype.groupForV6 = function () {
+        var segments = this.parsedAddress;
+        return this.address.replace(constants.RE_ADDRESS, sprintf_js_1.sprintf('<span class="hover-group group-v4 group-6">%s</span>.<span class="hover-group group-v4 group-7">%s</span>', segments.slice(0, 2).join('.'), segments.slice(2, 4).join('.')));
+    };
+    return Address4;
+}());
+exports.Address4 = Address4;
 
-    address = address.replace(constants.RE_SUBNET_STRING, '');
-  }
-
-  this.addressMinusSuffix = address;
-
-  this.parsedAddress = this.parse(address);
+},{"./address-error":4,"./common":5,"./v4/constants":8,"jsbn":12,"sprintf-js":13}],7:[function(require,module,exports){
+"use strict";
+/* eslint-disable prefer-destructuring */
+/* eslint-disable no-param-reassign */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __spreadArrays = (this && this.__spreadArrays) || function () {
+    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
+    for (var r = Array(s), k = 0, i = 0; i < il; i++)
+        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
+            r[k] = a[j];
+    return r;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Address6 = void 0;
+var common = __importStar(require("./common"));
+var constants4 = __importStar(require("./v4/constants"));
+var constants6 = __importStar(require("./v6/constants"));
+var helpers = __importStar(require("./v6/helpers"));
+var ipv4_1 = require("./ipv4");
+var regular_expressions_1 = require("./v6/regular-expressions");
+var address_error_1 = require("./address-error");
+var jsbn_1 = require("jsbn");
+var sprintf_js_1 = require("sprintf-js");
+function assert(condition) {
+    if (!condition) {
+        throw new Error('Assertion failed.');
+    }
 }
-
-/*
- * Parses a v4 address
- */
-Address4.prototype.parse = function (address) {
-  var groups = address.split('.');
-
-  if (address.match(constants.RE_ADDRESS)) {
-    this.valid = true;
-  } else {
-    this.error = 'Invalid IPv4 address.';
-  }
-
-  return groups;
-};
-
-/**
- * Return true if the address is valid
- * @memberof Address4
- * @instance
- * @returns {Boolean}
- */
-Address4.prototype.isValid = function () {
-  return this.valid;
-};
-
-/**
- * Returns the correct form of an address
- * @memberof Address4
- * @instance
- * @returns {String}
- */
-Address4.prototype.correctForm = function () {
-  return this.parsedAddress.map(function (part) {
-    return parseInt(part, 10);
-  }).join('.');
-};
-
-/**
- * Returns true if the address is correct, false otherwise
- * @memberof Address4
- * @instance
- * @returns {Boolean}
- */
-Address4.prototype.isCorrect = common.isCorrect(constants.BITS);
-
-/**
- * Converts a hex string to an IPv4 address object
- * @memberof Address4
- * @static
- * @param {string} hex - a hex string to convert
- * @returns {Address4}
- */
-Address4.fromHex = function (hex) {
-  var padded = padStart(hex.replace(/:/g, ''), 8, '0');
-  var groups = [];
-  var i;
-
-  for (i = 0; i < 8; i += 2) {
-    var h = padded.slice(i, i + 2);
-
-    groups.push(parseInt(h, 16));
-  }
-
-  return new Address4(groups.join('.'));
-};
-
-/**
- * Converts an integer into a IPv4 address object
- * @memberof Address4
- * @static
- * @param {integer} integer - a number to convert
- * @returns {Address4}
- */
-Address4.fromInteger = function (integer) {
-  return Address4.fromHex(integer.toString(16));
-};
-
-/**
- * Converts an IPv4 address object to a hex string
- * @memberof Address4
- * @instance
- * @returns {String}
- */
-Address4.prototype.toHex = function () {
-  return this.parsedAddress.map(function (part) {
-    return sprintf('%02x', parseInt(part, 10));
-  }).join(':');
-};
-
-/**
- * Converts an IPv4 address object to an array of bytes
- * @memberof Address4
- * @instance
- * @returns {Array}
- */
-Address4.prototype.toArray = function () {
-  return this.parsedAddress.map(function (part) {
-    return parseInt(part, 10);
-  });
-};
-
-/**
- * Converts an IPv4 address object to an IPv6 address group
- * @memberof Address4
- * @instance
- * @returns {String}
- */
-Address4.prototype.toGroup6 = function () {
-  var output = [];
-  var i;
-
-  for (i = 0; i < constants.GROUPS; i += 2) {
-    var hex = sprintf('%02x%02x',
-      parseInt(this.parsedAddress[i], 10),
-      parseInt(this.parsedAddress[i + 1], 10));
-
-    output.push(sprintf('%x', parseInt(hex, 16)));
-  }
-
-  return output.join(':');
-};
-
-/**
- * Returns the address as a BigInteger
- * @memberof Address4
- * @instance
- * @returns {BigInteger}
- */
-Address4.prototype.bigInteger = function () {
-  if (!this.valid) {
-    return null;
-  }
-
-  return new BigInteger(this.parsedAddress.map(function (n) {
-    return sprintf('%02x', parseInt(n, 10));
-  }).join(''), 16);
-};
-
-/**
- * Helper function getting start address.
- * @memberof Address4
- * @instance
- * @returns {BigInteger}
- */
-Address4.prototype._startAddress = function () {
-  return new BigInteger(
-    this.mask() + repeat('0', constants.BITS - this.subnetMask), 2
-  );
-};
-
-/**
- * The first address in the range given by this address' subnet.
- * Often referred to as the Network Address.
- * @memberof Address4
- * @instance
- * @returns {Address4}
- */
-Address4.prototype.startAddress = function () {
-  return Address4.fromBigInteger(this._startAddress());
-};
-
-/**
- * The first host address in the range given by this address's subnet ie
- * the first address after the Network Address
- * @memberof Address4
- * @instance
- * @returns {Address4}
- */
-Address4.prototype.startAddressExclusive = function () {
-  var adjust = new BigInteger('1');
-  return Address4.fromBigInteger(this._startAddress().add(adjust));
-};
-
-/**
- * Helper function getting end address.
- * @memberof Address4
- * @instance
- * @returns {BigInteger}
- */
-Address4.prototype._endAddress = function () {
-  return new BigInteger(
-    this.mask() + repeat('1', constants.BITS - this.subnetMask), 2
-  );
-};
-
-/**
- * The last address in the range given by this address' subnet
- * Often referred to as the Broadcast
- * @memberof Address4
- * @instance
- * @returns {Address4}
- */
-Address4.prototype.endAddress = function () {
-  return Address4.fromBigInteger(this._endAddress());
-};
-
-/**
- * The last host address in the range given by this address's subnet ie
- * the last address prior to the Broadcast Address
- * @memberof Address4
- * @instance
- * @returns {Address4}
- */
-Address4.prototype.endAddressExclusive = function () {
-  var adjust = new BigInteger('1');
-  return Address4.fromBigInteger(this._endAddress().subtract(adjust));
-};
-
-/**
- * Converts a BigInteger to a v4 address object
- * @memberof Address4
- * @static
- * @param {BigInteger} bigInteger - a BigInteger to convert
- * @returns {Address4}
- */
-Address4.fromBigInteger = function (bigInteger) {
-  return Address4.fromInteger(parseInt(bigInteger.toString(), 10));
-};
-
-/**
- * Returns the first n bits of the address, defaulting to the
- * subnet mask
- * @memberof Address4
- * @instance
- * @returns {String}
- */
-Address4.prototype.mask = function (optionalMask) {
-  if (optionalMask === undefined) {
-    optionalMask = this.subnetMask;
-  }
-
-  return this.getBitsBase2(0, optionalMask);
-};
-
-/**
- * Returns the bits in the given range as a base-2 string
- * @memberof Address4
- * @instance
- * @returns {string}
- */
-Address4.prototype.getBitsBase2 = function (start, end) {
-  return this.binaryZeroPad().slice(start, end);
-};
-
-/**
- * Returns true if the given address is in the subnet of the current address
- * @memberof Address4
- * @instance
- * @returns {boolean}
- */
-Address4.prototype.isInSubnet = common.isInSubnet;
-
-/**
- * Returns true if the given address is a multicast address
- * @memberof Address4
- * @instance
- * @returns {boolean}
- */
-Address4.prototype.isMulticast = function () {
-  return this.isInSubnet(new Address4('224.0.0.0/4'));
-};
-
-/**
- * Returns a zero-padded base-2 string representation of the address
- * @memberof Address4
- * @instance
- * @returns {string}
- */
-Address4.prototype.binaryZeroPad = function () {
-  return padStart(this.bigInteger().toString(2), constants.BITS, '0');
-};
-
-module.exports = Address4;
-
-},{"./common.js":4,"./v4/constants.js":7,"jsbn":13,"lodash.padstart":17,"lodash.repeat":18,"sprintf-js":19}],6:[function(require,module,exports){
-'use strict';
-
-var BigInteger = require('jsbn').BigInteger;
-var sprintf = require('sprintf-js').sprintf;
-
-var merge = require('lodash.merge');
-var padStart = require('lodash.padstart');
-var repeat = require('lodash.repeat');
-var find = require('lodash.find');
-var max = require('lodash.max');
-
-var constants4 = require('./v4/constants.js');
-var constants6 = require('./v6/constants.js');
-
-var Address4 = require('./ipv4.js');
-
 function addCommas(number) {
-  var r = /(\d+)(\d{3})/;
-
-  while (r.test(number)) {
-    number = number.replace(r, '$1,$2');
-  }
-
-  return number;
+    var r = /(\d+)(\d{3})/;
+    while (r.test(number)) {
+        number = number.replace(r, '$1,$2');
+    }
+    return number;
 }
-
 function spanLeadingZeroes4(n) {
-  n = n.replace(/^(0{1,})([1-9]+)$/, '<span class="parse-error">$1</span>$2');
-  n = n.replace(/^(0{1,})(0)$/, '<span class="parse-error">$1</span>$2');
-
-  return n;
+    n = n.replace(/^(0{1,})([1-9]+)$/, '<span class="parse-error">$1</span>$2');
+    n = n.replace(/^(0{1,})(0)$/, '<span class="parse-error">$1</span>$2');
+    return n;
 }
-
+/*
+ * A helper function to compact an array
+ */
+function compact(address, slice) {
+    var s1 = [];
+    var s2 = [];
+    var i;
+    for (i = 0; i < address.length; i++) {
+        if (i < slice[0]) {
+            s1.push(address[i]);
+        }
+        else if (i > slice[1]) {
+            s2.push(address[i]);
+        }
+    }
+    return s1.concat(['compact']).concat(s2);
+}
+function paddedHex(octet) {
+    return sprintf_js_1.sprintf('%04x', parseInt(octet, 16));
+}
+function unsignByte(b) {
+    // eslint-disable-next-line no-bitwise
+    return b & 0xff;
+}
 /**
  * Represents an IPv6 address
  * @class Address6
@@ -600,1471 +673,1159 @@ function spanLeadingZeroes4(n) {
  * @example
  * var address = new Address6('2001::/32');
  */
-function Address6(address, optionalGroups) {
-  if (optionalGroups === undefined) {
-    this.groups = constants6.GROUPS;
-  } else {
-    this.groups = optionalGroups;
-  }
-
-  this.v4 = false;
-
-  this.subnet = '/128';
-  this.subnetMask = 128;
-
-  this.zone = '';
-
-  this.address = address;
-
-  var subnet = constants6.RE_SUBNET_STRING.exec(address);
-
-  if (subnet) {
-    this.parsedSubnet = subnet[0].replace('/', '');
-    this.subnetMask = parseInt(this.parsedSubnet, 10);
-    this.subnet = '/' + this.subnetMask;
-
-    if (isNaN(this.subnetMask) ||
-      this.subnetMask < 0 ||
-      this.subnetMask > constants6.BITS) {
-      this.valid = false;
-      this.error = 'Invalid subnet mask.';
-
-      return;
+var Address6 = /** @class */ (function () {
+    function Address6(address, optionalGroups) {
+        this.addressMinusSuffix = '';
+        this.parsedSubnet = '';
+        this.subnet = '/128';
+        this.subnetMask = 128;
+        this.v4 = false;
+        this.zone = '';
+        // #region Attributes
+        /**
+         * Returns true if the given address is in the subnet of the current address
+         * @memberof Address6
+         * @instance
+         * @returns {boolean}
+         */
+        this.isInSubnet = common.isInSubnet;
+        /**
+         * Returns true if the address is correct, false otherwise
+         * @memberof Address6
+         * @instance
+         * @returns {boolean}
+         */
+        this.isCorrect = common.isCorrect(constants6.BITS);
+        if (optionalGroups === undefined) {
+            this.groups = constants6.GROUPS;
+        }
+        else {
+            this.groups = optionalGroups;
+        }
+        this.address = address;
+        var subnet = constants6.RE_SUBNET_STRING.exec(address);
+        if (subnet) {
+            this.parsedSubnet = subnet[0].replace('/', '');
+            this.subnetMask = parseInt(this.parsedSubnet, 10);
+            this.subnet = "/" + this.subnetMask;
+            if (Number.isNaN(this.subnetMask) ||
+                this.subnetMask < 0 ||
+                this.subnetMask > constants6.BITS) {
+                throw new address_error_1.AddressError('Invalid subnet mask.');
+            }
+            address = address.replace(constants6.RE_SUBNET_STRING, '');
+        }
+        else if (/\//.test(address)) {
+            throw new address_error_1.AddressError('Invalid subnet mask.');
+        }
+        var zone = constants6.RE_ZONE_STRING.exec(address);
+        if (zone) {
+            this.zone = zone[0];
+            address = address.replace(constants6.RE_ZONE_STRING, '');
+        }
+        this.addressMinusSuffix = address;
+        this.parsedAddress = this.parse(this.addressMinusSuffix);
     }
-
-    address = address.replace(constants6.RE_SUBNET_STRING, '');
-  } else if (/\//.test(address)) {
-    this.valid = false;
-    this.error = 'Invalid subnet mask.';
-
-    return;
-  }
-
-  var zone = constants6.RE_ZONE_STRING.exec(address);
-
-  if (zone) {
-    this.zone = zone[0];
-
-    address = address.replace(constants6.RE_ZONE_STRING, '');
-  }
-
-  this.addressMinusSuffix = address;
-
-  this.parsedAddress = this.parse(this.addressMinusSuffix);
-}
-
-merge(Address6.prototype, require('./v6/attributes.js'));
-merge(Address6.prototype, require('./v6/html.js'));
-merge(Address6.prototype, require('./v6/regular-expressions.js'));
-
-/**
- * Convert a BigInteger to a v6 address object
- * @memberof Address6
- * @static
- * @param {BigInteger} bigInteger - a BigInteger to convert
- * @returns {Address6}
- * @example
- * var bigInteger = new BigInteger('1000000000000');
- * var address = Address6.fromBigInteger(bigInteger);
- * address.correctForm(); // '::e8:d4a5:1000'
- */
-Address6.fromBigInteger = function (bigInteger) {
-  var hex = padStart(bigInteger.toString(16), 32, '0');
-  var groups = [];
-  var i;
-
-  for (i = 0; i < constants6.GROUPS; i++) {
-    groups.push(hex.slice(i * 4, (i + 1) * 4));
-  }
-
-  return new Address6(groups.join(':'));
-};
-
-/**
- * Convert a URL (with optional port number) to an address object
- * @memberof Address6
- * @static
- * @param {string} url - a URL with optional port number
- * @returns {Address6}
- * @example
- * var addressAndPort = Address6.fromURL('http://[ffff::]:8080/foo/');
- * addressAndPort.address.correctForm(); // 'ffff::'
- * addressAndPort.port; // 8080
- */
-Address6.fromURL = function (url) {
-  var host;
-  var port;
-  var result;
-
-  // If we have brackets parse them and find a port
-  if (url.indexOf('[') !== -1 && url.indexOf(']:') !== -1) {
-    result = constants6.RE_URL_WITH_PORT.exec(url);
-
-    if (result === null) {
-      return {
-        error: 'failed to parse address with port',
-        address: null,
-        port: null
-      };
-    }
-
-    host = result[1];
-    port = result[2];
-  // If there's a URL extract the address
-  } else if (url.indexOf('/') !== -1) {
-    // Remove the protocol prefix
-    url = url.replace(/^[a-z0-9]+:\/\//, '');
-
-    // Parse the address
-    result = constants6.RE_URL.exec(url);
-
-    if (result === null) {
-      return {
-        error: 'failed to parse address from URL',
-        address: null,
-        port: null
-      };
-    }
-
-    host = result[1];
-  // Otherwise just assign the URL to the host and let the library parse it
-  } else {
-    host = url;
-  }
-
-  // If there's a port convert it to an integer
-  if (port) {
-    port = parseInt(port, 10);
-
-    //squelch out of range ports
-    if (port < 0 || port > 65536) {
-      port = null;
-    }
-  } else {
-    // Standardize `undefined` to `null`
-    port = null;
-  }
-
-  return {
-    address: new Address6(host),
-    port: port
-  };
-};
-
-/**
- * Create an IPv6-mapped address given an IPv4 address
- * @memberof Address6
- * @static
- * @param {string} address - An IPv4 address string
- * @returns {Address6}
- * @example
- * var address = Address6.fromAddress4('192.168.0.1');
- * address.correctForm(); // '::ffff:c0a8:1'
- * address.to4in6(); // '::ffff:192.168.0.1'
- */
-Address6.fromAddress4 = function (address4) {
-  var address4 = new Address4(address4);
-
-  var mask6 = constants6.BITS - (constants4.BITS - address4.subnetMask);
-
-  return new Address6('::ffff:' + address4.correctForm() + '/' + mask6);
-};
-
-/**
- * Return an address from ip6.arpa form
- * @memberof Address6
- * @static
- * @param {string} arpaFormAddress - an 'ip6.arpa' form address
- * @returns {Adress6}
- * @example
- * var address = Address6.fromArpa(e.f.f.f.3.c.2.6.f.f.f.e.6.6.8.e.1.0.6.7.9.4.e.c.0.0.0.0.1.0.0.2.ip6.arpa.)
- * address.correctForm(); // '2001:0:ce49:7601:e866:efff:62c3:fffe'
- */
-Address6.fromArpa = function (arpaFormAddress) {
-  //remove ending ".ip6.arpa." or just "."
-  var address = arpaFormAddress.replace(/(\.ip6\.arpa)?\.$/, '');
-  var semicolonAmount = 7;
-
-  //correct ip6.arpa form with ending removed will be 63 characters
-  if (address.length !== 63) {
-    address = {
-      error: "Not Valid 'ip6.arpa' form",
-      address: null
+    Address6.isValid = function (address) {
+        try {
+            // eslint-disable-next-line no-new
+            new Address6(address);
+            return true;
+        }
+        catch (e) {
+            return false;
+        }
     };
-    return address;
-  }
-
-  address = address.split('.').reverse();
-
-  for (var i = semicolonAmount; i > 0; i--) {
-    var insertIndex = i * 4;
-    address.splice(insertIndex, 0, ':');
-  }
-
-  address = address.join('');
-  return new Address6(address);
-};
-
-/*
- * A helper function to compact an array
- */
-function compact (address, slice) {
-  var s1 = [];
-  var s2 = [];
-  var i;
-
-  for (i = 0; i < address.length; i++) {
-    if (i < slice[0]) {
-      s1.push(address[i]);
-    } else if (i > slice[1]) {
-      s2.push(address[i]);
-    }
-  }
-
-  return s1.concat(['compact']).concat(s2);
-}
-
-/**
- * Return the Microsoft UNC transcription of the address
- * @memberof Address6
- * @instance
- * @returns {String} the Microsoft UNC transcription of the address
- */
-Address6.prototype.microsoftTranscription = function () {
-  return sprintf('%s.ipv6-literal.net',
-    this.correctForm().replace(/:/g, '-'));
-};
-
-/**
- * Return the first n bits of the address, defaulting to the subnet mask
- * @memberof Address6
- * @instance
- * @param {number} [mask=subnet] - the number of bits to mask
- * @returns {String} the first n bits of the address as a string
- */
-Address6.prototype.mask = function (optionalMask) {
-  if (optionalMask === undefined) {
-    optionalMask = this.subnetMask;
-  }
-
-  return this.getBitsBase2(0, optionalMask);
-};
-
-/**
- * Return the number of possible subnets of a given size in the address
- * @memberof Address6
- * @instance
- * @param {number} [size=128] - the subnet size
- * @returns {String}
- */
-// TODO: probably useful to have a numeric version of this too
-Address6.prototype.possibleSubnets = function (optionalSubnetSize) {
-  if (optionalSubnetSize === undefined) {
-    optionalSubnetSize = 128;
-  }
-
-  var availableBits = constants6.BITS - this.subnetMask;
-  var subnetBits = Math.abs(optionalSubnetSize - constants6.BITS);
-  var subnetPowers = availableBits - subnetBits;
-
-  if (subnetPowers < 0) {
-    return '0';
-  }
-
-  return addCommas(new BigInteger('2', 10).pow(subnetPowers).toString(10));
-};
-
-/**
- * Helper function getting start address.
- * @memberof Address6
- * @instance
- * @returns {BigInteger}
- */
-Address6.prototype._startAddress = function () {
-  return new BigInteger(
-    this.mask() + repeat('0', constants6.BITS - this.subnetMask), 2
-  );
-};
-
-/**
- * The first address in the range given by this address' subnet
- * Often referred to as the Network Address.
- * @memberof Address6
- * @instance
- * @returns {Address6}
- */
-Address6.prototype.startAddress = function () {
-  return Address6.fromBigInteger(this._startAddress());
-};
-
-/**
- * The first host address in the range given by this address's subnet ie
- * the first address after the Network Address
- * @memberof Address6
- * @instance
- * @returns {Address6}
- */
-Address6.prototype.startAddressExclusive = function () {
-  var adjust = new BigInteger('1');
-  return Address6.fromBigInteger(this._startAddress().add(adjust));
-};
-
-/**
- * Helper function getting end address.
- * @memberof Address6
- * @instance
- * @returns {BigInteger}
- */
-Address6.prototype._endAddress = function () {
-  return new BigInteger(
-    this.mask() + repeat('1', constants6.BITS - this.subnetMask), 2
-  );
-};
-
-/**
- * The last address in the range given by this address' subnet
- * Often referred to as the Broadcast
- * @memberof Address6
- * @instance
- * @returns {Address6}
- */
-Address6.prototype.endAddress = function () {
-  return Address6.fromBigInteger(this._endAddress());
-};
-
-/**
- * The last host address in the range given by this address's subnet ie
- * the last address prior to the Broadcast Address
- * @memberof Address6
- * @instance
- * @returns {Address6}
- */
-Address6.prototype.endAddressExclusive = function () {
-  var adjust = new BigInteger('1');
-  return Address6.fromBigInteger(this._endAddress().subtract(adjust));
-};
-
-/**
- * Return the scope of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.getScope = function () {
-  var scope = constants6.SCOPES[this.getBits(12, 16)];
-
-  if (this.getType() === 'Global unicast' &&
-      scope !== 'Link local') {
-    scope = 'Global';
-  }
-
-  return scope;
-};
-
-/**
- * Return the type of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.getType = function () {
-  var self = this;
-
-  function isType(name, type) {
-    return self.isInSubnet(new Address6(type));
-  }
-
-  return find(constants6.TYPES, isType) || 'Global unicast';
-};
-
-/**
- * Return the bits in the given range as a BigInteger
- * @memberof Address6
- * @instance
- * @returns {BigInteger}
- */
-Address6.prototype.getBits = function (start, end) {
-  return new BigInteger(this.getBitsBase2(start, end), 2);
-};
-
-/**
- * Return the bits in the given range as a base-2 string
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.getBitsBase2 = function (start, end) {
-  return this.binaryZeroPad().slice(start, end);
-};
-
-/**
- * Return the bits in the given range as a base-16 string
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.getBitsBase16 = function (start, end) {
-  var length = end - start;
-
-  if (length % 4 !== 0) {
-    return null;
-  }
-
-  return padStart(this.getBits(start, end).toString(16), length / 4, '0');
-};
-
-/**
- * Return the bits that are set past the subnet mask length
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.getBitsPastSubnet = function () {
-  return this.getBitsBase2(this.subnetMask, constants6.BITS);
-};
-
-/**
- * Return the reversed ip6.arpa form of the address
- * @memberof Address6
- * @param {Object} options
- * @param {boolean} options.omitSuffix - omit the "ip6.arpa" suffix
- * @instance
- * @returns {String}
- */
-Address6.prototype.reverseForm = function (options) {
-  if (!options) {
-    options = {};
-  }
-
-  var characters = Math.floor(this.subnetMask / 4);
-
-  var reversed = this.canonicalForm()
-    .replace(/:/g, '')
-    .split('')
-    .slice(0, characters)
-    .reverse()
-    .join('.');
-
-  if (characters > 0) {
-    if (options.omitSuffix) {
-      return reversed;
-    }
-
-    return sprintf('%s.ip6.arpa.', reversed);
-  }
-
-  if (options.omitSuffix) {
-    return '';
-  }
-
-  return 'ip6.arpa.';
-};
-
-/**
- * Return the correct form of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.correctForm = function () {
-  if (!this.parsedAddress) {
-    return null;
-  }
-
-  var i;
-  var groups = [];
-
-  var zeroCounter = 0;
-  var zeroes = [];
-
-  for (i = 0; i < this.parsedAddress.length; i++) {
-    var value = parseInt(this.parsedAddress[i], 16);
-
-    if (value === 0) {
-      zeroCounter++;
-    }
-
-    if (value !== 0 && zeroCounter > 0) {
-      if (zeroCounter > 1) {
-        zeroes.push([i - zeroCounter, i - 1]);
-      }
-
-      zeroCounter = 0;
-    }
-  }
-
-  // Do we end with a string of zeroes?
-  if (zeroCounter > 1) {
-    zeroes.push([this.parsedAddress.length - zeroCounter,
-      this.parsedAddress.length - 1]);
-  }
-
-  var zeroLengths = zeroes.map(function (n) {
-    return (n[1] - n[0]) + 1;
-  });
-
-  if (zeroes.length > 0) {
-    var index = zeroLengths.indexOf(max(zeroLengths));
-
-    groups = compact(this.parsedAddress, zeroes[index]);
-  } else {
-    groups = this.parsedAddress;
-  }
-
-  for (i = 0; i < groups.length; i++) {
-    if (groups[i] !== 'compact') {
-      groups[i] = parseInt(groups[i], 16).toString(16);
-    }
-  }
-
-  var correct = groups.join(':');
-
-  correct = correct.replace(/^compact$/, '::');
-  correct = correct.replace(/^compact|compact$/, ':');
-  correct = correct.replace(/compact/, '');
-
-  return correct;
-};
-
-/**
- * Return a zero-padded base-2 string representation of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- * @example
- * var address = new Address6('2001:4860:4001:803::1011');
- * address.binaryZeroPad();
- * // '0010000000000001010010000110000001000000000000010000100000000011
- * //  0000000000000000000000000000000000000000000000000001000000010001'
- */
-Address6.prototype.binaryZeroPad = function () {
-  return padStart(this.bigInteger().toString(2), constants6.BITS, '0');
-};
-
-// TODO: Improve the semantics of this helper function
-Address6.prototype.parse4in6 = function (address) {
-  var groups = address.split(':');
-  var lastGroup = groups.slice(-1)[0];
-
-  var address4 = lastGroup.match(constants4.RE_ADDRESS);
-
-  if (address4) {
-    var temp4 = new Address4(address4[0]);
-
-    for (var i = 0; i < temp4.groups; i++) {
-      if (/^0[0-9]+/.test(temp4.parsedAddress[i])) {
-        this.valid = false;
-        this.error = 'IPv4 addresses can not have leading zeroes.';
-
-        this.parseError = address.replace(constants4.RE_ADDRESS,
-          temp4.parsedAddress.map(spanLeadingZeroes4).join('.'));
-
-        return null;
-      }
-    }
-
-    this.v4 = true;
-
-    groups[groups.length - 1] = temp4.toGroup6();
-
-    address = groups.join(':');
-  }
-
-  return address;
-};
-
-// TODO: Make private?
-Address6.prototype.parse = function (address) {
-  address = this.parse4in6(address);
-
-  if (this.error) {
-    return null;
-  }
-
-  var badCharacters = address.match(constants6.RE_BAD_CHARACTERS);
-
-  if (badCharacters) {
-    this.valid = false;
-    this.error = sprintf('Bad character%s detected in address: %s',
-      badCharacters.length > 1 ? 's' : '', badCharacters.join(''));
-
-    this.parseError = address.replace(constants6.RE_BAD_CHARACTERS,
-      '<span class="parse-error">$1</span>');
-
-    return null;
-  }
-
-  var badAddress = address.match(constants6.RE_BAD_ADDRESS);
-
-  if (badAddress) {
-    this.valid = false;
-    this.error = sprintf('Address failed regex: %s', badAddress.join(''));
-
-    this.parseError = address.replace(constants6.RE_BAD_ADDRESS,
-      '<span class="parse-error">$1</span>');
-
-    return null;
-  }
-
-  var groups = [];
-
-  var halves = address.split('::');
-
-  if (halves.length === 2) {
-    var first = halves[0].split(':');
-    var last = halves[1].split(':');
-
-    if (first.length === 1 &&
-      first[0] === '') {
-      first = [];
-    }
-
-    if (last.length === 1 &&
-      last[0] === '') {
-      last = [];
-    }
-
-    var remaining = this.groups - (first.length + last.length);
-
-    if (!remaining) {
-      this.valid = false;
-      this.error = 'Error parsing groups';
-
-      return null;
-    }
-
-    this.elidedGroups = remaining;
-
-    this.elisionBegin = first.length;
-    this.elisionEnd = first.length + this.elidedGroups;
-
-    first.forEach(function (group) {
-      groups.push(group);
-    });
-
-    for (var i = 0; i < remaining; i++) {
-      groups.push(0);
-    }
-
-    last.forEach(function (group) {
-      groups.push(group);
-    });
-  } else if (halves.length === 1) {
-    groups = address.split(':');
-
-    this.elidedGroups = 0;
-  } else {
-    this.valid = false;
-    this.error = 'Too many :: groups found';
-
-    return null;
-  }
-
-  groups = groups.map(function (g) {
-    return sprintf('%x', parseInt(g, 16));
-  });
-
-  if (groups.length !== this.groups) {
-    this.valid = false;
-    this.error = 'Incorrect number of groups found';
-
-    return null;
-  }
-
-  this.valid = true;
-
-  return groups;
-};
-
-function paddedHex(octet) {
-  return sprintf('%04x', parseInt(octet, 16));
-}
-
-/**
- * Return the canonical form of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.canonicalForm = function () {
-  if (!this.valid) {
-    return null;
-  }
-
-  return this.parsedAddress.map(paddedHex).join(':');
-};
-
-/**
- * Return the decimal form of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.decimal = function () {
-  if (!this.valid) {
-    return null;
-  }
-
-  return this.parsedAddress.map(function (n) {
-    return sprintf('%05d', parseInt(n, 16));
-  }).join(':');
-};
-
-/**
- * Return the address as a BigInteger
- * @memberof Address6
- * @instance
- * @returns {BigInteger}
- */
-Address6.prototype.bigInteger = function () {
-  if (!this.valid) {
-    return null;
-  }
-
-  return new BigInteger(this.parsedAddress.map(paddedHex).join(''), 16);
-};
-
-/**
- * Return the last two groups of this address as an IPv4 address string
- * @memberof Address6
- * @instance
- * @returns {Address4}
- * @example
- * var address = new Address6('2001:4860:4001::1825:bf11');
- * address.to4().correctForm(); // '24.37.191.17'
- */
-Address6.prototype.to4 = function () {
-  var binary = this.binaryZeroPad().split('');
-
-  return Address4.fromHex(new BigInteger(binary.slice(96, 128)
-    .join(''), 2).toString(16));
-};
-
-/**
- * Return the v4-in-v6 form of the address
- * @memberof Address6
- * @instance
- * @returns {String}
- */
-Address6.prototype.to4in6 = function () {
-  var address4 = this.to4();
-  var address6 = new Address6(this.parsedAddress.slice(0, 6).join(':'), 6);
-
-  var correct = address6.correctForm();
-
-  var infix = '';
-
-  if (!/:$/.test(correct)) {
-    infix = ':';
-  }
-
-  return address6.correctForm() + infix + address4.address;
-};
-
-/**
- * Return an object containing the Teredo properties of the address
- * @memberof Address6
- * @instance
- * @returns {Object}
- */
-Address6.prototype.inspectTeredo = function () {
-  /*
-  - Bits 0 to 31 are set to the Teredo prefix (normally 2001:0000::/32).
-  - Bits 32 to 63 embed the primary IPv4 address of the Teredo server that
-    is used.
-  - Bits 64 to 79 can be used to define some flags. Currently only the
-    higher order bit is used; it is set to 1 if the Teredo client is
-    located behind a cone NAT, 0 otherwise. For Microsoft's Windows Vista
-    and Windows Server 2008 implementations, more bits are used. In those
-    implementations, the format for these 16 bits is "CRAAAAUG AAAAAAAA",
-    where "C" remains the "Cone" flag. The "R" bit is reserved for future
-    use. The "U" bit is for the Universal/Local flag (set to 0). The "G" bit
-    is Individual/Group flag (set to 0). The A bits are set to a 12-bit
-    randomly generated number chosen by the Teredo client to introduce
-    additional protection for the Teredo node against IPv6-based scanning
-    attacks.
-  - Bits 80 to 95 contains the obfuscated UDP port number. This is the
-    port number that is mapped by the NAT to the Teredo client with all
-    bits inverted.
-  - Bits 96 to 127 contains the obfuscated IPv4 address. This is the
-    public IPv4 address of the NAT with all bits inverted.
-  */
-  var prefix = this.getBitsBase16(0, 32);
-
-  var udpPort = this.getBits(80, 96).xor(new BigInteger('ffff', 16)).toString();
-
-  var server4 = Address4.fromHex(this.getBitsBase16(32, 64));
-  var client4 = Address4.fromHex(this.getBits(96, 128)
-    .xor(new BigInteger('ffffffff', 16)).toString(16));
-
-  var flags = this.getBits(64, 80);
-  var flagsBase2 = this.getBitsBase2(64, 80);
-
-  var coneNat = flags.testBit(15);
-  var reserved = flags.testBit(14);
-  var groupIndividual = flags.testBit(8);
-  var universalLocal = flags.testBit(9);
-  var nonce = new BigInteger(flagsBase2.slice(2, 6) +
-    flagsBase2.slice(8, 16), 2).toString(10);
-
-  return {
-    prefix: sprintf('%s:%s', prefix.slice(0, 4), prefix.slice(4, 8)),
-    server4: server4.address,
-    client4: client4.address,
-    flags: flagsBase2,
-    coneNat: coneNat,
-    microsoft: {
-      reserved: reserved,
-      universalLocal: universalLocal,
-      groupIndividual: groupIndividual,
-      nonce: nonce
-    },
-    udpPort: udpPort
-  };
-};
-
-/**
- * Return an object containing the 6to4 properties of the address
- * @memberof Address6
- * @instance
- * @returns {Object}
- */
-Address6.prototype.inspect6to4 = function () {
-  /*
-  - Bits 0 to 15 are set to the 6to4 prefix (2002::/16).
-  - Bits 16 to 48 embed the IPv4 address of the 6to4 gateway that is used.
-  */
-
-  var prefix = this.getBitsBase16(0, 16);
-
-  var gateway = Address4.fromHex(this.getBitsBase16(16, 48));
-
-  return {
-    prefix: sprintf('%s', prefix.slice(0, 4)),
-    gateway: gateway.address
-  };
-};
-
-/**
- * Return a v6 6to4 address from a v6 v4inv6 address
- * @memberof Address6
- * @instance
- * @returns {Address6}
- */
-Address6.prototype.to6to4 = function () {
-  if (!this.is4()) {
-    return null;
-  }
-
-  var addr6to4 = [
-    '2002',
-    this.getBitsBase16(96, 112),
-    this.getBitsBase16(112, 128),
-    '',
-    '/16'
-  ].join(':');
-
-  return new Address6(addr6to4);
-};
-
-/**
- * Return a byte array
- * @memberof Address6
- * @instance
- * @returns {Array}
- */
-Address6.prototype.toByteArray = function () {
-  var byteArray = this.bigInteger().toByteArray();
-
-  // work around issue where `toByteArray` returns a leading 0 element
-  if (byteArray.length === 17 && byteArray[0] === 0) {
-    return byteArray.slice(1);
-  }
-
-  return byteArray;
-};
-
-function unsignByte(b) {
-  return b & 0xFF;
-}
-
-/**
- * Return an unsigned byte array
- * @memberof Address6
- * @instance
- * @returns {Array}
- */
-Address6.prototype.toUnsignedByteArray = function () {
-  return this.toByteArray().map(unsignByte);
-};
-
-/**
- * Convert a byte array to an Address6 object
- * @memberof Address6
- * @static
- * @returns {Address6}
- */
-Address6.fromByteArray = function (bytes) {
-  return this.fromUnsignedByteArray(bytes.map(unsignByte));
-};
-
-/**
- * Convert an unsigned byte array to an Address6 object
- * @memberof Address6
- * @static
- * @returns {Address6}
- */
-Address6.fromUnsignedByteArray = function (bytes) {
-  var BYTE_MAX = new BigInteger('256', 10);
-  var result = new BigInteger('0', 10);
-  var multiplier = new BigInteger('1', 10);
-
-  for (var i = bytes.length - 1; i >= 0; i--) {
-    result = result.add(
-      multiplier.multiply(new BigInteger(bytes[i].toString(10), 10)));
-
-    multiplier = multiplier.multiply(BYTE_MAX);
-  }
-
-  return Address6.fromBigInteger(result);
-};
-
-module.exports = Address6;
-
-},{"./ipv4.js":5,"./v4/constants.js":7,"./v6/attributes.js":8,"./v6/constants.js":9,"./v6/html.js":11,"./v6/regular-expressions.js":12,"jsbn":13,"lodash.find":14,"lodash.max":15,"lodash.merge":16,"lodash.padstart":17,"lodash.repeat":18,"sprintf-js":19}],7:[function(require,module,exports){
+    /**
+     * Convert a BigInteger to a v6 address object
+     * @memberof Address6
+     * @static
+     * @param {BigInteger} bigInteger - a BigInteger to convert
+     * @returns {Address6}
+     * @example
+     * var bigInteger = new BigInteger('1000000000000');
+     * var address = Address6.fromBigInteger(bigInteger);
+     * address.correctForm(); // '::e8:d4a5:1000'
+     */
+    Address6.fromBigInteger = function (bigInteger) {
+        var hex = bigInteger.toString(16).padStart(32, '0');
+        var groups = [];
+        var i;
+        for (i = 0; i < constants6.GROUPS; i++) {
+            groups.push(hex.slice(i * 4, (i + 1) * 4));
+        }
+        return new Address6(groups.join(':'));
+    };
+    /**
+     * Convert a URL (with optional port number) to an address object
+     * @memberof Address6
+     * @static
+     * @param {string} url - a URL with optional port number
+     * @example
+     * var addressAndPort = Address6.fromURL('http://[ffff::]:8080/foo/');
+     * addressAndPort.address.correctForm(); // 'ffff::'
+     * addressAndPort.port; // 8080
+     */
+    Address6.fromURL = function (url) {
+        var host;
+        var port = null;
+        var result;
+        // If we have brackets parse them and find a port
+        if (url.indexOf('[') !== -1 && url.indexOf(']:') !== -1) {
+            result = constants6.RE_URL_WITH_PORT.exec(url);
+            if (result === null) {
+                return {
+                    error: 'failed to parse address with port',
+                    address: null,
+                    port: null,
+                };
+            }
+            host = result[1];
+            port = result[2];
+            // If there's a URL extract the address
+        }
+        else if (url.indexOf('/') !== -1) {
+            // Remove the protocol prefix
+            url = url.replace(/^[a-z0-9]+:\/\//, '');
+            // Parse the address
+            result = constants6.RE_URL.exec(url);
+            if (result === null) {
+                return {
+                    error: 'failed to parse address from URL',
+                    address: null,
+                    port: null,
+                };
+            }
+            host = result[1];
+            // Otherwise just assign the URL to the host and let the library parse it
+        }
+        else {
+            host = url;
+        }
+        // If there's a port convert it to an integer
+        if (port) {
+            port = parseInt(port, 10);
+            // squelch out of range ports
+            if (port < 0 || port > 65536) {
+                port = null;
+            }
+        }
+        else {
+            // Standardize `undefined` to `null`
+            port = null;
+        }
+        return {
+            address: new Address6(host),
+            port: port,
+        };
+    };
+    /**
+     * Create an IPv6-mapped address given an IPv4 address
+     * @memberof Address6
+     * @static
+     * @param {string} address - An IPv4 address string
+     * @returns {Address6}
+     * @example
+     * var address = Address6.fromAddress4('192.168.0.1');
+     * address.correctForm(); // '::ffff:c0a8:1'
+     * address.to4in6(); // '::ffff:192.168.0.1'
+     */
+    Address6.fromAddress4 = function (address) {
+        var address4 = new ipv4_1.Address4(address);
+        var mask6 = constants6.BITS - (constants4.BITS - address4.subnetMask);
+        return new Address6("::ffff:" + address4.correctForm() + "/" + mask6);
+    };
+    /**
+     * Return an address from ip6.arpa form
+     * @memberof Address6
+     * @static
+     * @param {string} arpaFormAddress - an 'ip6.arpa' form address
+     * @returns {Adress6}
+     * @example
+     * var address = Address6.fromArpa(e.f.f.f.3.c.2.6.f.f.f.e.6.6.8.e.1.0.6.7.9.4.e.c.0.0.0.0.1.0.0.2.ip6.arpa.)
+     * address.correctForm(); // '2001:0:ce49:7601:e866:efff:62c3:fffe'
+     */
+    Address6.fromArpa = function (arpaFormAddress) {
+        // remove ending ".ip6.arpa." or just "."
+        var address = arpaFormAddress.replace(/(\.ip6\.arpa)?\.$/, '');
+        var semicolonAmount = 7;
+        // correct ip6.arpa form with ending removed will be 63 characters
+        if (address.length !== 63) {
+            throw new address_error_1.AddressError("Invalid 'ip6.arpa' form.");
+        }
+        var parts = address.split('.').reverse();
+        for (var i = semicolonAmount; i > 0; i--) {
+            var insertIndex = i * 4;
+            parts.splice(insertIndex, 0, ':');
+        }
+        address = parts.join('');
+        return new Address6(address);
+    };
+    /**
+     * Return the Microsoft UNC transcription of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String} the Microsoft UNC transcription of the address
+     */
+    Address6.prototype.microsoftTranscription = function () {
+        return sprintf_js_1.sprintf('%s.ipv6-literal.net', this.correctForm().replace(/:/g, '-'));
+    };
+    /**
+     * Return the first n bits of the address, defaulting to the subnet mask
+     * @memberof Address6
+     * @instance
+     * @param {number} [mask=subnet] - the number of bits to mask
+     * @returns {String} the first n bits of the address as a string
+     */
+    Address6.prototype.mask = function (mask) {
+        if (mask === void 0) { mask = this.subnetMask; }
+        return this.getBitsBase2(0, mask);
+    };
+    /**
+     * Return the number of possible subnets of a given size in the address
+     * @memberof Address6
+     * @instance
+     * @param {number} [size=128] - the subnet size
+     * @returns {String}
+     */
+    // TODO: probably useful to have a numeric version of this too
+    Address6.prototype.possibleSubnets = function (subnetSize) {
+        if (subnetSize === void 0) { subnetSize = 128; }
+        var availableBits = constants6.BITS - this.subnetMask;
+        var subnetBits = Math.abs(subnetSize - constants6.BITS);
+        var subnetPowers = availableBits - subnetBits;
+        if (subnetPowers < 0) {
+            return '0';
+        }
+        return addCommas(new jsbn_1.BigInteger('2', 10).pow(subnetPowers).toString(10));
+    };
+    /**
+     * Helper function getting start address.
+     * @memberof Address6
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address6.prototype._startAddress = function () {
+        return new jsbn_1.BigInteger(this.mask() + '0'.repeat(constants6.BITS - this.subnetMask), 2);
+    };
+    /**
+     * The first address in the range given by this address' subnet
+     * Often referred to as the Network Address.
+     * @memberof Address6
+     * @instance
+     * @returns {Address6}
+     */
+    Address6.prototype.startAddress = function () {
+        return Address6.fromBigInteger(this._startAddress());
+    };
+    /**
+     * The first host address in the range given by this address's subnet ie
+     * the first address after the Network Address
+     * @memberof Address6
+     * @instance
+     * @returns {Address6}
+     */
+    Address6.prototype.startAddressExclusive = function () {
+        var adjust = new jsbn_1.BigInteger('1');
+        return Address6.fromBigInteger(this._startAddress().add(adjust));
+    };
+    /**
+     * Helper function getting end address.
+     * @memberof Address6
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address6.prototype._endAddress = function () {
+        return new jsbn_1.BigInteger(this.mask() + '1'.repeat(constants6.BITS - this.subnetMask), 2);
+    };
+    /**
+     * The last address in the range given by this address' subnet
+     * Often referred to as the Broadcast
+     * @memberof Address6
+     * @instance
+     * @returns {Address6}
+     */
+    Address6.prototype.endAddress = function () {
+        return Address6.fromBigInteger(this._endAddress());
+    };
+    /**
+     * The last host address in the range given by this address's subnet ie
+     * the last address prior to the Broadcast Address
+     * @memberof Address6
+     * @instance
+     * @returns {Address6}
+     */
+    Address6.prototype.endAddressExclusive = function () {
+        var adjust = new jsbn_1.BigInteger('1');
+        return Address6.fromBigInteger(this._endAddress().subtract(adjust));
+    };
+    /**
+     * Return the scope of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.getScope = function () {
+        var scope = constants6.SCOPES[this.getBits(12, 16).intValue()];
+        if (this.getType() === 'Global unicast' && scope !== 'Link local') {
+            scope = 'Global';
+        }
+        return scope || 'Unknown';
+    };
+    /**
+     * Return the type of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.getType = function () {
+        for (var _i = 0, _a = Object.keys(constants6.TYPES); _i < _a.length; _i++) {
+            var subnet = _a[_i];
+            if (this.isInSubnet(new Address6(subnet))) {
+                return constants6.TYPES[subnet];
+            }
+        }
+        return 'Global unicast';
+    };
+    /**
+     * Return the bits in the given range as a BigInteger
+     * @memberof Address6
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address6.prototype.getBits = function (start, end) {
+        return new jsbn_1.BigInteger(this.getBitsBase2(start, end), 2);
+    };
+    /**
+     * Return the bits in the given range as a base-2 string
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.getBitsBase2 = function (start, end) {
+        return this.binaryZeroPad().slice(start, end);
+    };
+    /**
+     * Return the bits in the given range as a base-16 string
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.getBitsBase16 = function (start, end) {
+        var length = end - start;
+        if (length % 4 !== 0) {
+            throw new Error('Length of bits to retrieve must be divisible by four');
+        }
+        return this.getBits(start, end)
+            .toString(16)
+            .padStart(length / 4, '0');
+    };
+    /**
+     * Return the bits that are set past the subnet mask length
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.getBitsPastSubnet = function () {
+        return this.getBitsBase2(this.subnetMask, constants6.BITS);
+    };
+    /**
+     * Return the reversed ip6.arpa form of the address
+     * @memberof Address6
+     * @param {Object} options
+     * @param {boolean} options.omitSuffix - omit the "ip6.arpa" suffix
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.reverseForm = function (options) {
+        if (!options) {
+            options = {};
+        }
+        var characters = Math.floor(this.subnetMask / 4);
+        var reversed = this.canonicalForm()
+            .replace(/:/g, '')
+            .split('')
+            .slice(0, characters)
+            .reverse()
+            .join('.');
+        if (characters > 0) {
+            if (options.omitSuffix) {
+                return reversed;
+            }
+            return sprintf_js_1.sprintf('%s.ip6.arpa.', reversed);
+        }
+        if (options.omitSuffix) {
+            return '';
+        }
+        return 'ip6.arpa.';
+    };
+    /**
+     * Return the correct form of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.correctForm = function () {
+        var i;
+        var groups = [];
+        var zeroCounter = 0;
+        var zeroes = [];
+        for (i = 0; i < this.parsedAddress.length; i++) {
+            var value = parseInt(this.parsedAddress[i], 16);
+            if (value === 0) {
+                zeroCounter++;
+            }
+            if (value !== 0 && zeroCounter > 0) {
+                if (zeroCounter > 1) {
+                    zeroes.push([i - zeroCounter, i - 1]);
+                }
+                zeroCounter = 0;
+            }
+        }
+        // Do we end with a string of zeroes?
+        if (zeroCounter > 1) {
+            zeroes.push([this.parsedAddress.length - zeroCounter, this.parsedAddress.length - 1]);
+        }
+        var zeroLengths = zeroes.map(function (n) { return n[1] - n[0] + 1; });
+        if (zeroes.length > 0) {
+            var index = zeroLengths.indexOf(Math.max.apply(Math, zeroLengths));
+            groups = compact(this.parsedAddress, zeroes[index]);
+        }
+        else {
+            groups = this.parsedAddress;
+        }
+        for (i = 0; i < groups.length; i++) {
+            if (groups[i] !== 'compact') {
+                groups[i] = parseInt(groups[i], 16).toString(16);
+            }
+        }
+        var correct = groups.join(':');
+        correct = correct.replace(/^compact$/, '::');
+        correct = correct.replace(/^compact|compact$/, ':');
+        correct = correct.replace(/compact/, '');
+        return correct;
+    };
+    /**
+     * Return a zero-padded base-2 string representation of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     * @example
+     * var address = new Address6('2001:4860:4001:803::1011');
+     * address.binaryZeroPad();
+     * // '0010000000000001010010000110000001000000000000010000100000000011
+     * //  0000000000000000000000000000000000000000000000000001000000010001'
+     */
+    Address6.prototype.binaryZeroPad = function () {
+        return this.bigInteger().toString(2).padStart(constants6.BITS, '0');
+    };
+    // TODO: Improve the semantics of this helper function
+    Address6.prototype.parse4in6 = function (address) {
+        var groups = address.split(':');
+        var lastGroup = groups.slice(-1)[0];
+        var address4 = lastGroup.match(constants4.RE_ADDRESS);
+        if (address4) {
+            this.parsedAddress4 = address4[0];
+            this.address4 = new ipv4_1.Address4(this.parsedAddress4);
+            for (var i = 0; i < this.address4.groups; i++) {
+                if (/^0[0-9]+/.test(this.address4.parsedAddress[i])) {
+                    throw new address_error_1.AddressError("IPv4 addresses can't have leading zeroes.", address.replace(constants4.RE_ADDRESS, this.address4.parsedAddress.map(spanLeadingZeroes4).join('.')));
+                }
+            }
+            this.v4 = true;
+            groups[groups.length - 1] = this.address4.toGroup6();
+            address = groups.join(':');
+        }
+        return address;
+    };
+    // TODO: Make private?
+    Address6.prototype.parse = function (address) {
+        address = this.parse4in6(address);
+        var badCharacters = address.match(constants6.RE_BAD_CHARACTERS);
+        if (badCharacters) {
+            throw new address_error_1.AddressError(sprintf_js_1.sprintf('Bad character%s detected in address: %s', badCharacters.length > 1 ? 's' : '', badCharacters.join('')), address.replace(constants6.RE_BAD_CHARACTERS, '<span class="parse-error">$1</span>'));
+        }
+        var badAddress = address.match(constants6.RE_BAD_ADDRESS);
+        if (badAddress) {
+            throw new address_error_1.AddressError(sprintf_js_1.sprintf('Address failed regex: %s', badAddress.join('')), address.replace(constants6.RE_BAD_ADDRESS, '<span class="parse-error">$1</span>'));
+        }
+        var groups = [];
+        var halves = address.split('::');
+        if (halves.length === 2) {
+            var first = halves[0].split(':');
+            var last = halves[1].split(':');
+            if (first.length === 1 && first[0] === '') {
+                first = [];
+            }
+            if (last.length === 1 && last[0] === '') {
+                last = [];
+            }
+            var remaining = this.groups - (first.length + last.length);
+            if (!remaining) {
+                throw new address_error_1.AddressError('Error parsing groups');
+            }
+            this.elidedGroups = remaining;
+            this.elisionBegin = first.length;
+            this.elisionEnd = first.length + this.elidedGroups;
+            groups = groups.concat(first);
+            for (var i = 0; i < remaining; i++) {
+                groups.push('0');
+            }
+            groups = groups.concat(last);
+        }
+        else if (halves.length === 1) {
+            groups = address.split(':');
+            this.elidedGroups = 0;
+        }
+        else {
+            throw new address_error_1.AddressError('Too many :: groups found');
+        }
+        groups = groups.map(function (group) { return sprintf_js_1.sprintf('%x', parseInt(group, 16)); });
+        if (groups.length !== this.groups) {
+            throw new address_error_1.AddressError('Incorrect number of groups found');
+        }
+        return groups;
+    };
+    /**
+     * Return the canonical form of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.canonicalForm = function () {
+        return this.parsedAddress.map(paddedHex).join(':');
+    };
+    /**
+     * Return the decimal form of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.decimal = function () {
+        return this.parsedAddress.map(function (n) { return sprintf_js_1.sprintf('%05d', parseInt(n, 16)); }).join(':');
+    };
+    /**
+     * Return the address as a BigInteger
+     * @memberof Address6
+     * @instance
+     * @returns {BigInteger}
+     */
+    Address6.prototype.bigInteger = function () {
+        return new jsbn_1.BigInteger(this.parsedAddress.map(paddedHex).join(''), 16);
+    };
+    /**
+     * Return the last two groups of this address as an IPv4 address string
+     * @memberof Address6
+     * @instance
+     * @returns {Address4}
+     * @example
+     * var address = new Address6('2001:4860:4001::1825:bf11');
+     * address.to4().correctForm(); // '24.37.191.17'
+     */
+    Address6.prototype.to4 = function () {
+        var binary = this.binaryZeroPad().split('');
+        return ipv4_1.Address4.fromHex(new jsbn_1.BigInteger(binary.slice(96, 128).join(''), 2).toString(16));
+    };
+    /**
+     * Return the v4-in-v6 form of the address
+     * @memberof Address6
+     * @instance
+     * @returns {String}
+     */
+    Address6.prototype.to4in6 = function () {
+        var address4 = this.to4();
+        var address6 = new Address6(this.parsedAddress.slice(0, 6).join(':'), 6);
+        var correct = address6.correctForm();
+        var infix = '';
+        if (!/:$/.test(correct)) {
+            infix = ':';
+        }
+        return correct + infix + address4.address;
+    };
+    /**
+     * Return an object containing the Teredo properties of the address
+     * @memberof Address6
+     * @instance
+     * @returns {Object}
+     */
+    Address6.prototype.inspectTeredo = function () {
+        /*
+        - Bits 0 to 31 are set to the Teredo prefix (normally 2001:0000::/32).
+        - Bits 32 to 63 embed the primary IPv4 address of the Teredo server that
+          is used.
+        - Bits 64 to 79 can be used to define some flags. Currently only the
+          higher order bit is used; it is set to 1 if the Teredo client is
+          located behind a cone NAT, 0 otherwise. For Microsoft's Windows Vista
+          and Windows Server 2008 implementations, more bits are used. In those
+          implementations, the format for these 16 bits is "CRAAAAUG AAAAAAAA",
+          where "C" remains the "Cone" flag. The "R" bit is reserved for future
+          use. The "U" bit is for the Universal/Local flag (set to 0). The "G" bit
+          is Individual/Group flag (set to 0). The A bits are set to a 12-bit
+          randomly generated number chosen by the Teredo client to introduce
+          additional protection for the Teredo node against IPv6-based scanning
+          attacks.
+        - Bits 80 to 95 contains the obfuscated UDP port number. This is the
+          port number that is mapped by the NAT to the Teredo client with all
+          bits inverted.
+        - Bits 96 to 127 contains the obfuscated IPv4 address. This is the
+          public IPv4 address of the NAT with all bits inverted.
+        */
+        var prefix = this.getBitsBase16(0, 32);
+        var udpPort = this.getBits(80, 96).xor(new jsbn_1.BigInteger('ffff', 16)).toString();
+        var server4 = ipv4_1.Address4.fromHex(this.getBitsBase16(32, 64));
+        var client4 = ipv4_1.Address4.fromHex(this.getBits(96, 128).xor(new jsbn_1.BigInteger('ffffffff', 16)).toString(16));
+        var flags = this.getBits(64, 80);
+        var flagsBase2 = this.getBitsBase2(64, 80);
+        var coneNat = flags.testBit(15);
+        var reserved = flags.testBit(14);
+        var groupIndividual = flags.testBit(8);
+        var universalLocal = flags.testBit(9);
+        var nonce = new jsbn_1.BigInteger(flagsBase2.slice(2, 6) + flagsBase2.slice(8, 16), 2).toString(10);
+        return {
+            prefix: sprintf_js_1.sprintf('%s:%s', prefix.slice(0, 4), prefix.slice(4, 8)),
+            server4: server4.address,
+            client4: client4.address,
+            flags: flagsBase2,
+            coneNat: coneNat,
+            microsoft: {
+                reserved: reserved,
+                universalLocal: universalLocal,
+                groupIndividual: groupIndividual,
+                nonce: nonce,
+            },
+            udpPort: udpPort,
+        };
+    };
+    /**
+     * Return an object containing the 6to4 properties of the address
+     * @memberof Address6
+     * @instance
+     * @returns {Object}
+     */
+    Address6.prototype.inspect6to4 = function () {
+        /*
+        - Bits 0 to 15 are set to the 6to4 prefix (2002::/16).
+        - Bits 16 to 48 embed the IPv4 address of the 6to4 gateway that is used.
+        */
+        var prefix = this.getBitsBase16(0, 16);
+        var gateway = ipv4_1.Address4.fromHex(this.getBitsBase16(16, 48));
+        return {
+            prefix: sprintf_js_1.sprintf('%s', prefix.slice(0, 4)),
+            gateway: gateway.address,
+        };
+    };
+    /**
+     * Return a v6 6to4 address from a v6 v4inv6 address
+     * @memberof Address6
+     * @instance
+     * @returns {Address6}
+     */
+    Address6.prototype.to6to4 = function () {
+        if (!this.is4()) {
+            return null;
+        }
+        var addr6to4 = [
+            '2002',
+            this.getBitsBase16(96, 112),
+            this.getBitsBase16(112, 128),
+            '',
+            '/16',
+        ].join(':');
+        return new Address6(addr6to4);
+    };
+    /**
+     * Return a byte array
+     * @memberof Address6
+     * @instance
+     * @returns {Array}
+     */
+    Address6.prototype.toByteArray = function () {
+        var byteArray = this.bigInteger().toByteArray();
+        // work around issue where `toByteArray` returns a leading 0 element
+        if (byteArray.length === 17 && byteArray[0] === 0) {
+            return byteArray.slice(1);
+        }
+        return byteArray;
+    };
+    /**
+     * Return an unsigned byte array
+     * @memberof Address6
+     * @instance
+     * @returns {Array}
+     */
+    Address6.prototype.toUnsignedByteArray = function () {
+        return this.toByteArray().map(unsignByte);
+    };
+    /**
+     * Convert a byte array to an Address6 object
+     * @memberof Address6
+     * @static
+     * @returns {Address6}
+     */
+    Address6.fromByteArray = function (bytes) {
+        return this.fromUnsignedByteArray(bytes.map(unsignByte));
+    };
+    /**
+     * Convert an unsigned byte array to an Address6 object
+     * @memberof Address6
+     * @static
+     * @returns {Address6}
+     */
+    Address6.fromUnsignedByteArray = function (bytes) {
+        var BYTE_MAX = new jsbn_1.BigInteger('256', 10);
+        var result = new jsbn_1.BigInteger('0', 10);
+        var multiplier = new jsbn_1.BigInteger('1', 10);
+        for (var i = bytes.length - 1; i >= 0; i--) {
+            result = result.add(multiplier.multiply(new jsbn_1.BigInteger(bytes[i].toString(10), 10)));
+            multiplier = multiplier.multiply(BYTE_MAX);
+        }
+        return Address6.fromBigInteger(result);
+    };
+    /**
+     * Returns true if the address is in the canonical form, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.isCanonical = function () {
+        return this.addressMinusSuffix === this.canonicalForm();
+    };
+    /**
+     * Returns true if the address is a link local address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.isLinkLocal = function () {
+        // Zeroes are required, i.e. we can't check isInSubnet with 'fe80::/10'
+        if (this.getBitsBase2(0, 64) ===
+            '1111111010000000000000000000000000000000000000000000000000000000') {
+            return true;
+        }
+        return false;
+    };
+    /**
+     * Returns true if the address is a multicast address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.isMulticast = function () {
+        return this.getType() === 'Multicast';
+    };
+    /**
+     * Returns true if the address is a v4-in-v6 address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.is4 = function () {
+        return this.v4;
+    };
+    /**
+     * Returns true if the address is a Teredo address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.isTeredo = function () {
+        return this.isInSubnet(new Address6('2001::/32'));
+    };
+    /**
+     * Returns true if the address is a 6to4 address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.is6to4 = function () {
+        return this.isInSubnet(new Address6('2002::/16'));
+    };
+    /**
+     * Returns true if the address is a loopback address, false otherwise
+     * @memberof Address6
+     * @instance
+     * @returns {boolean}
+     */
+    Address6.prototype.isLoopback = function () {
+        return this.getType() === 'Loopback';
+    };
+    // #endregion
+    // #region HTML
+    /**
+     * @returns {String} the address in link form with a default port of 80
+     */
+    Address6.prototype.href = function (optionalPort) {
+        if (optionalPort === undefined) {
+            optionalPort = '';
+        }
+        else {
+            optionalPort = sprintf_js_1.sprintf(':%s', optionalPort);
+        }
+        return sprintf_js_1.sprintf('http://[%s]%s/', this.correctForm(), optionalPort);
+    };
+    /**
+     * @returns {String} a link suitable for conveying the address via a URL hash
+     */
+    Address6.prototype.link = function (options) {
+        if (!options) {
+            options = {};
+        }
+        if (options.className === undefined) {
+            options.className = '';
+        }
+        if (options.prefix === undefined) {
+            options.prefix = '/#address=';
+        }
+        if (options.v4 === undefined) {
+            options.v4 = false;
+        }
+        var formFunction = this.correctForm;
+        if (options.v4) {
+            formFunction = this.to4in6;
+        }
+        if (options.className) {
+            return sprintf_js_1.sprintf('<a href="%1$s%2$s" class="%3$s">%2$s</a>', options.prefix, formFunction.call(this), options.className);
+        }
+        return sprintf_js_1.sprintf('<a href="%1$s%2$s">%2$s</a>', options.prefix, formFunction.call(this));
+    };
+    /**
+     * Groups an address
+     * @returns {String}
+     */
+    Address6.prototype.group = function () {
+        if (this.elidedGroups === 0) {
+            // The simple case
+            return helpers.simpleGroup(this.address).join(':');
+        }
+        assert(typeof this.elidedGroups === 'number');
+        assert(typeof this.elisionBegin === 'number');
+        // The elided case
+        var output = [];
+        var _a = this.address.split('::'), left = _a[0], right = _a[1];
+        if (left.length) {
+            output.push.apply(output, helpers.simpleGroup(left));
+        }
+        else {
+            output.push('');
+        }
+        var classes = ['hover-group'];
+        for (var i = this.elisionBegin; i < this.elisionBegin + this.elidedGroups; i++) {
+            classes.push(sprintf_js_1.sprintf('group-%d', i));
+        }
+        output.push(sprintf_js_1.sprintf('<span class="%s"></span>', classes.join(' ')));
+        if (right.length) {
+            output.push.apply(output, helpers.simpleGroup(right, this.elisionEnd));
+        }
+        else {
+            output.push('');
+        }
+        if (this.is4()) {
+            assert(this.address4 instanceof ipv4_1.Address4);
+            output.pop();
+            output.push(this.address4.groupForV6());
+        }
+        return output.join(':');
+    };
+    // #endregion
+    // #region Regular expressions
+    /**
+     * Generate a regular expression string that can be used to find or validate
+     * all variations of this address
+     * @memberof Address6
+     * @instance
+     * @param {boolean} substringSearch
+     * @returns {string}
+     */
+    Address6.prototype.regularExpressionString = function (substringSearch) {
+        if (substringSearch === void 0) { substringSearch = false; }
+        var output = [];
+        // TODO: revisit why this is necessary
+        var address6 = new Address6(this.correctForm());
+        if (address6.elidedGroups === 0) {
+            // The simple case
+            output.push(regular_expressions_1.simpleRegularExpression(address6.parsedAddress));
+        }
+        else if (address6.elidedGroups === constants6.GROUPS) {
+            // A completely elided address
+            output.push(regular_expressions_1.possibleElisions(constants6.GROUPS));
+        }
+        else {
+            // A partially elided address
+            var halves = address6.address.split('::');
+            if (halves[0].length) {
+                output.push(regular_expressions_1.simpleRegularExpression(halves[0].split(':')));
+            }
+            assert(typeof address6.elidedGroups === 'number');
+            output.push(regular_expressions_1.possibleElisions(address6.elidedGroups, halves[0].length !== 0, halves[1].length !== 0));
+            if (halves[1].length) {
+                output.push(regular_expressions_1.simpleRegularExpression(halves[1].split(':')));
+            }
+            output = [output.join(':')];
+        }
+        if (!substringSearch) {
+            output = __spreadArrays([
+                '(?=^|',
+                regular_expressions_1.ADDRESS_BOUNDARY,
+                '|[^\\w\\:])('
+            ], output, [
+                ')(?=[^\\w\\:]|',
+                regular_expressions_1.ADDRESS_BOUNDARY,
+                '|$)',
+            ]);
+        }
+        return output.join('');
+    };
+    /**
+     * Generate a regular expression that can be used to find or validate all
+     * variations of this address.
+     * @memberof Address6
+     * @instance
+     * @param {boolean} substringSearch
+     * @returns {RegExp}
+     */
+    Address6.prototype.regularExpression = function (substringSearch) {
+        if (substringSearch === void 0) { substringSearch = false; }
+        return new RegExp(this.regularExpressionString(substringSearch), 'i');
+    };
+    return Address6;
+}());
+exports.Address6 = Address6;
+
+},{"./address-error":4,"./common":5,"./ipv4":6,"./v4/constants":8,"./v6/constants":9,"./v6/helpers":10,"./v6/regular-expressions":11,"jsbn":12,"sprintf-js":13}],8:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RE_SUBNET_STRING = exports.RE_ADDRESS = exports.GROUPS = exports.BITS = void 0;
 exports.BITS = 32;
 exports.GROUPS = 4;
-
 exports.RE_ADDRESS = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/g;
-
 exports.RE_SUBNET_STRING = /\/\d{1,2}$/;
 
-},{}],8:[function(require,module,exports){
-'use strict';
-
-var common = require('../common.js');
-var v6 = require('./constants.js');
-
-/**
- * Returns true if the address is valid, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isValid = function () {
-  return this.valid;
-};
-
-/**
- * Returns true if the given address is in the subnet of the current address
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isInSubnet = common.isInSubnet;
-
-/**
- * Returns true if the address is correct, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isCorrect = common.isCorrect(v6.BITS);
-
-/**
- * Returns true if the address is in the canonical form, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isCanonical = common.falseIfInvalid(function () {
-  return this.addressMinusSuffix === this.canonicalForm();
-});
-
-/**
- * Returns true if the address is a link local address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isLinkLocal = common.falseIfInvalid(function () {
-  // Zeroes are required, i.e. we can't check isInSubnet with 'fe80::/10'
-  if (this.getBitsBase2(0, 64) ===
-    '1111111010000000000000000000000000000000000000000000000000000000') {
-    return true;
-  }
-
-  return false;
-});
-
-/**
- * Returns true if the address is a multicast address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isMulticast = common.falseIfInvalid(function () {
-  return this.getType() === 'Multicast';
-});
-
-/**
- * Returns true if the address is a v4-in-v6 address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.is4 = common.falseIfInvalid(function () {
-  return this.v4;
-});
-
-/**
- * Returns true if the address is a Teredo address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isTeredo = common.falseIfInvalid(function () {
-  return this.isInSubnet(new this.constructor('2001::/32'));
-});
-
-/**
- * Returns true if the address is a 6to4 address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.is6to4 = common.falseIfInvalid(function () {
-  return this.isInSubnet(new this.constructor('2002::/16'));
-});
-
-/**
- * Returns true if the address is a loopback address, false otherwise
- * @memberof Address6
- * @instance
- * @returns {boolean}
- */
-exports.isLoopback = common.falseIfInvalid(function () {
-  return this.getType() === 'Loopback';
-});
-
-},{"../common.js":4,"./constants.js":9}],9:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RE_URL_WITH_PORT = exports.RE_URL = exports.RE_ZONE_STRING = exports.RE_SUBNET_STRING = exports.RE_BAD_ADDRESS = exports.RE_BAD_CHARACTERS = exports.TYPES = exports.SCOPES = exports.GROUPS = exports.BITS = void 0;
 exports.BITS = 128;
 exports.GROUPS = 8;
-
 /**
  * Represents IPv6 address scopes
  * @memberof Address6
  * @static
  */
 exports.SCOPES = {
-  0: 'Reserved',
-  1: 'Interface local',
-  2: 'Link local',
-  4: 'Admin local',
-  5: 'Site local',
-  8: 'Organization local',
-  14: 'Global',
-  15: 'Reserved'
+    0: 'Reserved',
+    1: 'Interface local',
+    2: 'Link local',
+    4: 'Admin local',
+    5: 'Site local',
+    8: 'Organization local',
+    14: 'Global',
+    15: 'Reserved',
 };
-
 /**
  * Represents IPv6 address types
  * @memberof Address6
  * @static
  */
 exports.TYPES = {
-  'ff01::1/128': 'Multicast (All nodes on this interface)',
-  'ff01::2/128': 'Multicast (All routers on this interface)',
-  'ff02::1/128': 'Multicast (All nodes on this link)',
-  'ff02::2/128': 'Multicast (All routers on this link)',
-  'ff05::2/128': 'Multicast (All routers in this site)',
-  'ff02::5/128': 'Multicast (OSPFv3 AllSPF routers)',
-  'ff02::6/128': 'Multicast (OSPFv3 AllDR routers)',
-  'ff02::9/128': 'Multicast (RIP routers)',
-  'ff02::a/128': 'Multicast (EIGRP routers)',
-  'ff02::d/128': 'Multicast (PIM routers)',
-  'ff02::16/128': 'Multicast (MLDv2 reports)',
-  'ff01::fb/128': 'Multicast (mDNSv6)',
-  'ff02::fb/128': 'Multicast (mDNSv6)',
-  'ff05::fb/128': 'Multicast (mDNSv6)',
-  'ff02::1:2/128': 'Multicast (All DHCP servers and relay agents on this link)',
-  'ff05::1:2/128': 'Multicast (All DHCP servers and relay agents in this site)',
-  'ff02::1:3/128': 'Multicast (All DHCP servers on this link)',
-  'ff05::1:3/128': 'Multicast (All DHCP servers in this site)',
-  '::/128': 'Unspecified',
-  '::1/128': 'Loopback',
-  'ff00::/8': 'Multicast',
-  'fe80::/10': 'Link-local unicast'
+    'ff01::1/128': 'Multicast (All nodes on this interface)',
+    'ff01::2/128': 'Multicast (All routers on this interface)',
+    'ff02::1/128': 'Multicast (All nodes on this link)',
+    'ff02::2/128': 'Multicast (All routers on this link)',
+    'ff05::2/128': 'Multicast (All routers in this site)',
+    'ff02::5/128': 'Multicast (OSPFv3 AllSPF routers)',
+    'ff02::6/128': 'Multicast (OSPFv3 AllDR routers)',
+    'ff02::9/128': 'Multicast (RIP routers)',
+    'ff02::a/128': 'Multicast (EIGRP routers)',
+    'ff02::d/128': 'Multicast (PIM routers)',
+    'ff02::16/128': 'Multicast (MLDv2 reports)',
+    'ff01::fb/128': 'Multicast (mDNSv6)',
+    'ff02::fb/128': 'Multicast (mDNSv6)',
+    'ff05::fb/128': 'Multicast (mDNSv6)',
+    'ff02::1:2/128': 'Multicast (All DHCP servers and relay agents on this link)',
+    'ff05::1:2/128': 'Multicast (All DHCP servers and relay agents in this site)',
+    'ff02::1:3/128': 'Multicast (All DHCP servers on this link)',
+    'ff05::1:3/128': 'Multicast (All DHCP servers in this site)',
+    '::/128': 'Unspecified',
+    '::1/128': 'Loopback',
+    'ff00::/8': 'Multicast',
+    'fe80::/10': 'Link-local unicast',
 };
-
 /**
  * A regular expression that matches bad characters in an IPv6 address
  * @memberof Address6
  * @static
  */
-exports.RE_BAD_CHARACTERS = /([^0-9a-f:\/%])/ig;
-
+exports.RE_BAD_CHARACTERS = /([^0-9a-f:/%])/gi;
 /**
  * A regular expression that matches an incorrect IPv6 address
  * @memberof Address6
  * @static
  */
-exports.RE_BAD_ADDRESS = /([0-9a-f]{5,}|:{3,}|[^:]:$|^:[^:]|\/$)/ig;
-
+exports.RE_BAD_ADDRESS = /([0-9a-f]{5,}|:{3,}|[^:]:$|^:[^:]|\/$)/gi;
 /**
  * A regular expression that matches an IPv6 subnet
  * @memberof Address6
  * @static
  */
 exports.RE_SUBNET_STRING = /\/\d{1,3}(?=%|$)/;
-
 /**
  * A regular expression that matches an IPv6 zone
  * @memberof Address6
  * @static
  */
 exports.RE_ZONE_STRING = /%.*$/;
-
 exports.RE_URL = new RegExp(/^\[{0,1}([0-9a-f:]+)\]{0,1}/);
 exports.RE_URL_WITH_PORT = new RegExp(/\[([0-9a-f:]+)\]:([0-9]{1,5})/);
 
 },{}],10:[function(require,module,exports){
-'use strict';
-
-var sprintf = require('sprintf-js').sprintf;
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.simpleGroup = exports.spanLeadingZeroes = exports.spanAll = exports.spanAllZeroes = void 0;
+var sprintf_js_1 = require("sprintf-js");
 /**
  * @returns {String} the string with all zeroes contained in a <span>
  */
-var spanAllZeroes = exports.spanAllZeroes = function (s) {
-  return s.replace(/(0+)/g, '<span class="zero">$1</span>');
-};
-
+function spanAllZeroes(s) {
+    return s.replace(/(0+)/g, '<span class="zero">$1</span>');
+}
+exports.spanAllZeroes = spanAllZeroes;
 /**
  * @returns {String} the string with each character contained in a <span>
  */
-exports.spanAll = function (s, optionalOffset) {
-  if (optionalOffset === undefined) {
-    optionalOffset = 0;
-  }
-
-  var letters = s.split('');
-
-  return letters.map(function (n, i) {
-    return sprintf('<span class="digit value-%s position-%d">%s</span>', n,
-      i + optionalOffset,
-      spanAllZeroes(n)); // XXX Use #base-2 .value-0 instead?
-  }).join('');
-};
-
-function spanLeadingZeroesSimple(group) {
-  return group.replace(/^(0+)/, '<span class="zero">$1</span>');
+function spanAll(s, offset) {
+    if (offset === void 0) { offset = 0; }
+    var letters = s.split('');
+    return letters
+        .map(function (n, i) {
+        return sprintf_js_1.sprintf('<span class="digit value-%s position-%d">%s</span>', n, i + offset, spanAllZeroes(n));
+    } // XXX Use #base-2 .value-0 instead?
+    )
+        .join('');
 }
-
+exports.spanAll = spanAll;
+function spanLeadingZeroesSimple(group) {
+    return group.replace(/^(0+)/, '<span class="zero">$1</span>');
+}
 /**
  * @returns {String} the string with leading zeroes contained in a <span>
  */
-exports.spanLeadingZeroes = function (address) {
-  var groups = address.split(':');
-
-  return groups.map(function (g) {
-    return spanLeadingZeroesSimple(g);
-  }).join(':');
-};
-
+function spanLeadingZeroes(address) {
+    var groups = address.split(':');
+    return groups.map(function (g) { return spanLeadingZeroesSimple(g); }).join(':');
+}
+exports.spanLeadingZeroes = spanLeadingZeroes;
 /**
  * Groups an address
  * @returns {String} a grouped address
  */
-exports.simpleGroup = function (addressString, offset) {
-  var groups = addressString.split(':');
+function simpleGroup(addressString, offset) {
+    if (offset === void 0) { offset = 0; }
+    var groups = addressString.split(':');
+    return groups.map(function (g, i) {
+        if (/group-v4/.test(g)) {
+            return g;
+        }
+        return sprintf_js_1.sprintf('<span class="hover-group group-%d">%s</span>', i + offset, spanLeadingZeroesSimple(g));
+    });
+}
+exports.simpleGroup = simpleGroup;
 
-  if (!offset) {
-    offset = 0;
-  }
-
-  return groups.map(function (g, i) {
-    if (/group-v4/.test(g)) {
-      return g;
-    }
-
-    return sprintf('<span class="hover-group group-%d">%s</span>',
-      i + offset,
-      spanLeadingZeroesSimple(g));
-  }).join(':');
+},{"sprintf-js":13}],11:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
 };
-
-},{"sprintf-js":19}],11:[function(require,module,exports){
-'use strict';
-
-var constants4 = require('../v4/constants.js');
-var helpers = require('./helpers.js');
-var sprintf = require('sprintf-js').sprintf;
-
-/**
- * @returns {String} the address in link form with a default port of 80
- */
-exports.href = function (optionalPort) {
-  if (optionalPort === undefined) {
-    optionalPort = '';
-  } else {
-    optionalPort = sprintf(':%s', optionalPort);
-  }
-
-  return sprintf('http://[%s]%s/', this.correctForm(), optionalPort);
-};
-
-/**
- * @returns {String} a link suitable for conveying the address via a URL hash
- */
-exports.link = function (options) {
-  if (!options) {
-    options = {};
-  }
-
-  if (options.className === undefined) {
-    options.className = '';
-  }
-
-  if (options.prefix === undefined) {
-    options.prefix = '/#address=';
-  }
-
-  if (options.v4 === undefined) {
-    options.v4 = false;
-  }
-
-  var formFunction = this.correctForm;
-
-  if (options.v4) {
-    formFunction = this.to4in6;
-  }
-
-  if (options.className) {
-    return sprintf('<a href="%1$s%2$s" class="%3$s">%2$s</a>',
-      options.prefix, formFunction.call(this), options.className);
-  }
-
-  return sprintf('<a href="%1$s%2$s">%2$s</a>', options.prefix,
-    formFunction.call(this));
-};
-
-/**
- * Groups an address
- * @returns {String}
- */
-exports.group = function () {
-  var address4 = this.address.match(constants4.RE_ADDRESS);
-  var i;
-
-  if (address4) {
-    // The IPv4 case
-    var segments = address4[0].split('.');
-
-    this.address = this.address.replace(constants4.RE_ADDRESS,
-      sprintf('<span class="hover-group group-v4 group-6">%s</span>' +
-        '.' +
-        '<span class="hover-group group-v4 group-7">%s</span>',
-        segments.slice(0, 2).join('.'),
-        segments.slice(2, 4).join('.')));
-  }
-
-  if (this.elidedGroups === 0) {
-    // The simple case
-    return helpers.simpleGroup(this.address);
-  }
-
-  // The elided case
-  var output = [];
-
-  var halves = this.address.split('::');
-
-  if (halves[0].length) {
-    output.push(helpers.simpleGroup(halves[0]));
-  } else {
-    output.push('');
-  }
-
-  var classes = ['hover-group'];
-
-  for (i = this.elisionBegin;
-       i < this.elisionBegin + this.elidedGroups; i++) {
-    classes.push(sprintf('group-%d', i));
-  }
-
-  output.push(sprintf('<span class="%s"></span>', classes.join(' ')));
-
-  if (halves[1].length) {
-    output.push(helpers.simpleGroup(halves[1], this.elisionEnd));
-  } else {
-    output.push('');
-  }
-
-  return output.join(':');
-};
-
-},{"../v4/constants.js":7,"./helpers.js":10,"sprintf-js":19}],12:[function(require,module,exports){
-'use strict';
-
-var sprintf = require('sprintf-js').sprintf;
-
-var v6 = require('./constants.js');
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.possibleElisions = exports.simpleRegularExpression = exports.ADDRESS_BOUNDARY = exports.padGroup = exports.groupPossibilities = void 0;
+var v6 = __importStar(require("./constants"));
+var sprintf_js_1 = require("sprintf-js");
 function groupPossibilities(possibilities) {
-  return sprintf('(%s)', possibilities.join('|'));
+    return sprintf_js_1.sprintf('(%s)', possibilities.join('|'));
 }
-
+exports.groupPossibilities = groupPossibilities;
 function padGroup(group) {
-  if (group.length < 4) {
-    return sprintf('0{0,%d}%s', 4 - group.length, group);
-  }
-
-  return group;
+    if (group.length < 4) {
+        return sprintf_js_1.sprintf('0{0,%d}%s', 4 - group.length, group);
+    }
+    return group;
 }
-
-var ADDRESS_BOUNDARY = '[^A-Fa-f0-9:]';
-
+exports.padGroup = padGroup;
+exports.ADDRESS_BOUNDARY = '[^A-Fa-f0-9:]';
 function simpleRegularExpression(groups) {
-  var zeroIndexes = [];
-
-  groups.forEach(function (group, i) {
-    var groupInteger = parseInt(group, 16);
-
-    if (groupInteger === 0) {
-      zeroIndexes.push(i);
-    }
-  });
-
-  // You can technically elide a single 0, this creates the regular expressions
-  // to match that eventuality
-  var possibilities = zeroIndexes.map(function (zeroIndex) {
-    return groups.map(function (group, i) {
-      if (i === zeroIndex) {
-        var elision = (i === 0 || i === v6.GROUPS - 1) ? ':' : '';
-
-        return groupPossibilities([padGroup(group), elision]);
-      }
-
-      return padGroup(group);
-    }).join(':');
-  });
-
-  // The simplest case
-  possibilities.push(groups.map(padGroup).join(':'));
-
-  return groupPossibilities(possibilities);
+    var zeroIndexes = [];
+    groups.forEach(function (group, i) {
+        var groupInteger = parseInt(group, 16);
+        if (groupInteger === 0) {
+            zeroIndexes.push(i);
+        }
+    });
+    // You can technically elide a single 0, this creates the regular expressions
+    // to match that eventuality
+    var possibilities = zeroIndexes.map(function (zeroIndex) {
+        return groups
+            .map(function (group, i) {
+            if (i === zeroIndex) {
+                var elision = i === 0 || i === v6.GROUPS - 1 ? ':' : '';
+                return groupPossibilities([padGroup(group), elision]);
+            }
+            return padGroup(group);
+        })
+            .join(':');
+    });
+    // The simplest case
+    possibilities.push(groups.map(padGroup).join(':'));
+    return groupPossibilities(possibilities);
 }
-
+exports.simpleRegularExpression = simpleRegularExpression;
 function possibleElisions(elidedGroups, moreLeft, moreRight) {
-  var left = moreLeft ? '' : ':';
-  var right = moreRight ? '' : ':';
-
-  var possibilities = [];
-
-  // 1. elision of everything (::)
-  if (!moreLeft && !moreRight) {
-    possibilities.push('::');
-  }
-
-  // 2. complete elision of the middle
-  if (moreLeft && moreRight) {
-    possibilities.push('');
-  }
-
-  if ((moreRight && !moreLeft) || (!moreRight && moreLeft)) {
-    // 3. complete elision of one side
-    possibilities.push(':');
-  }
-
-  // 4. elision from the left side
-  possibilities.push(sprintf('%s(:0{1,4}){1,%d}', left, elidedGroups - 1));
-
-  // 5. elision from the right side
-  possibilities.push(sprintf('(0{1,4}:){1,%d}%s', elidedGroups - 1, right));
-
-  // 6. no elision
-  possibilities.push(sprintf('(0{1,4}:){%d}0{1,4}', elidedGroups - 1));
-
-  // 7. elision (including sloppy elision) from the middle
-  for (var groups = 1; groups < elidedGroups - 1; groups++) {
-    for (var position = 1; position < elidedGroups - groups; position++) {
-      possibilities.push(sprintf('(0{1,4}:){%d}:(0{1,4}:){%d}0{1,4}',
-        position,
-        elidedGroups - position - groups - 1));
+    var left = moreLeft ? '' : ':';
+    var right = moreRight ? '' : ':';
+    var possibilities = [];
+    // 1. elision of everything (::)
+    if (!moreLeft && !moreRight) {
+        possibilities.push('::');
     }
-  }
-
-  return groupPossibilities(possibilities);
+    // 2. complete elision of the middle
+    if (moreLeft && moreRight) {
+        possibilities.push('');
+    }
+    if ((moreRight && !moreLeft) || (!moreRight && moreLeft)) {
+        // 3. complete elision of one side
+        possibilities.push(':');
+    }
+    // 4. elision from the left side
+    possibilities.push(sprintf_js_1.sprintf('%s(:0{1,4}){1,%d}', left, elidedGroups - 1));
+    // 5. elision from the right side
+    possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){1,%d}%s', elidedGroups - 1, right));
+    // 6. no elision
+    possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){%d}0{1,4}', elidedGroups - 1));
+    // 7. elision (including sloppy elision) from the middle
+    for (var groups = 1; groups < elidedGroups - 1; groups++) {
+        for (var position = 1; position < elidedGroups - groups; position++) {
+            possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){%d}:(0{1,4}:){%d}0{1,4}', position, elidedGroups - position - groups - 1));
+        }
+    }
+    return groupPossibilities(possibilities);
 }
+exports.possibleElisions = possibleElisions;
 
-/**
- * Generate a regular expression string that can be used to find or validate
- * all variations of this address
- * @memberof Address6
- * @instance
- * @param {string} optionalSubString
- * @returns {string}
- */
-exports.regularExpressionString = function (optionalSubString) {
-  if (optionalSubString === undefined) {
-    optionalSubString = false;
-  }
-
-  var output = [];
-
-  // TODO: revisit why this is necessary
-  var address6 = new this.constructor(this.correctForm());
-
-  if (address6.elidedGroups === 0) {
-    // The simple case
-    output.push(simpleRegularExpression(address6.parsedAddress));
-  } else if (address6.elidedGroups === v6.GROUPS) {
-    // A completely elided address
-    output.push(possibleElisions(v6.GROUPS));
-  } else {
-    // A partially elided address
-    var halves = address6.address.split('::');
-
-    if (halves[0].length) {
-      output.push(simpleRegularExpression(halves[0].split(':')));
-    }
-
-    output.push(possibleElisions(address6.elidedGroups,
-      halves[0].length !== 0,
-      halves[1].length !== 0));
-
-    if (halves[1].length) {
-      output.push(simpleRegularExpression(halves[1].split(':')));
-    }
-
-    output = [output.join(':')];
-  }
-
-  if (!optionalSubString) {
-    output = [].concat(
-      '(?=^|',
-      ADDRESS_BOUNDARY,
-      '|[^\\w\\:])(', output, ')(?=[^\\w\\:]|',
-      ADDRESS_BOUNDARY,
-      '|$)');
-  }
-
-  return output.join('');
-};
-
-/**
- * Generate a regular expression that can be used to find or validate all
- * variations of this address.
- * @memberof Address6
- * @instance
- * @param {string} optionalSubString
- * @returns {RegExp}
- */
-exports.regularExpression = function (optionalSubstring) {
-  return new RegExp(this.regularExpressionString(optionalSubstring), 'i');
-};
-
-},{"./constants.js":9,"sprintf-js":19}],13:[function(require,module,exports){
+},{"./constants":9,"sprintf-js":13}],12:[function(require,module,exports){
 (function(){
 
     // Copyright (c) 2005  Tom Wu
@@ -3427,5692 +3188,7 @@ exports.regularExpression = function (optionalSubstring) {
 
 }).call(this);
 
-},{}],14:[function(require,module,exports){
-(function (global){
-/**
- * lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright jQuery Foundation and other contributors <https://jquery.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** Used as the size to enable large array optimizations. */
-var LARGE_ARRAY_SIZE = 200;
-
-/** Used as the `TypeError` message for "Functions" methods. */
-var FUNC_ERROR_TEXT = 'Expected a function';
-
-/** Used to stand-in for `undefined` hash values. */
-var HASH_UNDEFINED = '__lodash_hash_undefined__';
-
-/** Used to compose bitmasks for comparison styles. */
-var UNORDERED_COMPARE_FLAG = 1,
-    PARTIAL_COMPARE_FLAG = 2;
-
-/** Used as references for various `Number` constants. */
-var INFINITY = 1 / 0,
-    MAX_SAFE_INTEGER = 9007199254740991,
-    MAX_INTEGER = 1.7976931348623157e+308,
-    NAN = 0 / 0;
-
-/** `Object#toString` result references. */
-var argsTag = '[object Arguments]',
-    arrayTag = '[object Array]',
-    boolTag = '[object Boolean]',
-    dateTag = '[object Date]',
-    errorTag = '[object Error]',
-    funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]',
-    mapTag = '[object Map]',
-    numberTag = '[object Number]',
-    objectTag = '[object Object]',
-    promiseTag = '[object Promise]',
-    regexpTag = '[object RegExp]',
-    setTag = '[object Set]',
-    stringTag = '[object String]',
-    symbolTag = '[object Symbol]',
-    weakMapTag = '[object WeakMap]';
-
-var arrayBufferTag = '[object ArrayBuffer]',
-    dataViewTag = '[object DataView]',
-    float32Tag = '[object Float32Array]',
-    float64Tag = '[object Float64Array]',
-    int8Tag = '[object Int8Array]',
-    int16Tag = '[object Int16Array]',
-    int32Tag = '[object Int32Array]',
-    uint8Tag = '[object Uint8Array]',
-    uint8ClampedTag = '[object Uint8ClampedArray]',
-    uint16Tag = '[object Uint16Array]',
-    uint32Tag = '[object Uint32Array]';
-
-/** Used to match property names within property paths. */
-var reIsDeepProp = /\.|\[(?:[^[\]]*|(["'])(?:(?!\1)[^\\]|\\.)*?\1)\]/,
-    reIsPlainProp = /^\w*$/,
-    reLeadingDot = /^\./,
-    rePropName = /[^.[\]]+|\[(?:(-?\d+(?:\.\d+)?)|(["'])((?:(?!\2)[^\\]|\\.)*?)\2)\]|(?=(?:\.|\[\])(?:\.|\[\]|$))/g;
-
-/**
- * Used to match `RegExp`
- * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
- */
-var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
-
-/** Used to match leading and trailing whitespace. */
-var reTrim = /^\s+|\s+$/g;
-
-/** Used to match backslashes in property paths. */
-var reEscapeChar = /\\(\\)?/g;
-
-/** Used to detect bad signed hexadecimal string values. */
-var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
-
-/** Used to detect binary string values. */
-var reIsBinary = /^0b[01]+$/i;
-
-/** Used to detect host constructors (Safari). */
-var reIsHostCtor = /^\[object .+?Constructor\]$/;
-
-/** Used to detect octal string values. */
-var reIsOctal = /^0o[0-7]+$/i;
-
-/** Used to detect unsigned integer values. */
-var reIsUint = /^(?:0|[1-9]\d*)$/;
-
-/** Used to identify `toStringTag` values of typed arrays. */
-var typedArrayTags = {};
-typedArrayTags[float32Tag] = typedArrayTags[float64Tag] =
-typedArrayTags[int8Tag] = typedArrayTags[int16Tag] =
-typedArrayTags[int32Tag] = typedArrayTags[uint8Tag] =
-typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] =
-typedArrayTags[uint32Tag] = true;
-typedArrayTags[argsTag] = typedArrayTags[arrayTag] =
-typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] =
-typedArrayTags[dataViewTag] = typedArrayTags[dateTag] =
-typedArrayTags[errorTag] = typedArrayTags[funcTag] =
-typedArrayTags[mapTag] = typedArrayTags[numberTag] =
-typedArrayTags[objectTag] = typedArrayTags[regexpTag] =
-typedArrayTags[setTag] = typedArrayTags[stringTag] =
-typedArrayTags[weakMapTag] = false;
-
-/** Built-in method references without a dependency on `root`. */
-var freeParseInt = parseInt;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/** Detect free variable `exports`. */
-var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
-
-/** Detect free variable `module`. */
-var freeModule = freeExports && typeof module == 'object' && module && !module.nodeType && module;
-
-/** Detect the popular CommonJS extension `module.exports`. */
-var moduleExports = freeModule && freeModule.exports === freeExports;
-
-/** Detect free variable `process` from Node.js. */
-var freeProcess = moduleExports && freeGlobal.process;
-
-/** Used to access faster Node.js helpers. */
-var nodeUtil = (function() {
-  try {
-    return freeProcess && freeProcess.binding('util');
-  } catch (e) {}
-}());
-
-/* Node.js helper references. */
-var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
-
-/**
- * A specialized version of `_.some` for arrays without support for iteratee
- * shorthands.
- *
- * @private
- * @param {Array} [array] The array to iterate over.
- * @param {Function} predicate The function invoked per iteration.
- * @returns {boolean} Returns `true` if any element passes the predicate check,
- *  else `false`.
- */
-function arraySome(array, predicate) {
-  var index = -1,
-      length = array ? array.length : 0;
-
-  while (++index < length) {
-    if (predicate(array[index], index, array)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * The base implementation of `_.findIndex` and `_.findLastIndex` without
- * support for iteratee shorthands.
- *
- * @private
- * @param {Array} array The array to inspect.
- * @param {Function} predicate The function invoked per iteration.
- * @param {number} fromIndex The index to search from.
- * @param {boolean} [fromRight] Specify iterating from right to left.
- * @returns {number} Returns the index of the matched value, else `-1`.
- */
-function baseFindIndex(array, predicate, fromIndex, fromRight) {
-  var length = array.length,
-      index = fromIndex + (fromRight ? 1 : -1);
-
-  while ((fromRight ? index-- : ++index < length)) {
-    if (predicate(array[index], index, array)) {
-      return index;
-    }
-  }
-  return -1;
-}
-
-/**
- * The base implementation of `_.property` without support for deep paths.
- *
- * @private
- * @param {string} key The key of the property to get.
- * @returns {Function} Returns the new accessor function.
- */
-function baseProperty(key) {
-  return function(object) {
-    return object == null ? undefined : object[key];
-  };
-}
-
-/**
- * The base implementation of `_.times` without support for iteratee shorthands
- * or max array length checks.
- *
- * @private
- * @param {number} n The number of times to invoke `iteratee`.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the array of results.
- */
-function baseTimes(n, iteratee) {
-  var index = -1,
-      result = Array(n);
-
-  while (++index < n) {
-    result[index] = iteratee(index);
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.unary` without support for storing metadata.
- *
- * @private
- * @param {Function} func The function to cap arguments for.
- * @returns {Function} Returns the new capped function.
- */
-function baseUnary(func) {
-  return function(value) {
-    return func(value);
-  };
-}
-
-/**
- * Gets the value at `key` of `object`.
- *
- * @private
- * @param {Object} [object] The object to query.
- * @param {string} key The key of the property to get.
- * @returns {*} Returns the property value.
- */
-function getValue(object, key) {
-  return object == null ? undefined : object[key];
-}
-
-/**
- * Checks if `value` is a host object in IE < 9.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a host object, else `false`.
- */
-function isHostObject(value) {
-  // Many host objects are `Object` objects that can coerce to strings
-  // despite having improperly defined `toString` methods.
-  var result = false;
-  if (value != null && typeof value.toString != 'function') {
-    try {
-      result = !!(value + '');
-    } catch (e) {}
-  }
-  return result;
-}
-
-/**
- * Converts `map` to its key-value pairs.
- *
- * @private
- * @param {Object} map The map to convert.
- * @returns {Array} Returns the key-value pairs.
- */
-function mapToArray(map) {
-  var index = -1,
-      result = Array(map.size);
-
-  map.forEach(function(value, key) {
-    result[++index] = [key, value];
-  });
-  return result;
-}
-
-/**
- * Creates a unary function that invokes `func` with its argument transformed.
- *
- * @private
- * @param {Function} func The function to wrap.
- * @param {Function} transform The argument transform.
- * @returns {Function} Returns the new function.
- */
-function overArg(func, transform) {
-  return function(arg) {
-    return func(transform(arg));
-  };
-}
-
-/**
- * Converts `set` to an array of its values.
- *
- * @private
- * @param {Object} set The set to convert.
- * @returns {Array} Returns the values.
- */
-function setToArray(set) {
-  var index = -1,
-      result = Array(set.size);
-
-  set.forEach(function(value) {
-    result[++index] = value;
-  });
-  return result;
-}
-
-/** Used for built-in method references. */
-var arrayProto = Array.prototype,
-    funcProto = Function.prototype,
-    objectProto = Object.prototype;
-
-/** Used to detect overreaching core-js shims. */
-var coreJsData = root['__core-js_shared__'];
-
-/** Used to detect methods masquerading as native. */
-var maskSrcKey = (function() {
-  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
-  return uid ? ('Symbol(src)_1.' + uid) : '';
-}());
-
-/** Used to resolve the decompiled source of functions. */
-var funcToString = funcProto.toString;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Used to detect if a method is native. */
-var reIsNative = RegExp('^' +
-  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
-  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
-);
-
-/** Built-in value references. */
-var Symbol = root.Symbol,
-    Uint8Array = root.Uint8Array,
-    propertyIsEnumerable = objectProto.propertyIsEnumerable,
-    splice = arrayProto.splice;
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeKeys = overArg(Object.keys, Object),
-    nativeMax = Math.max;
-
-/* Built-in method references that are verified to be native. */
-var DataView = getNative(root, 'DataView'),
-    Map = getNative(root, 'Map'),
-    Promise = getNative(root, 'Promise'),
-    Set = getNative(root, 'Set'),
-    WeakMap = getNative(root, 'WeakMap'),
-    nativeCreate = getNative(Object, 'create');
-
-/** Used to detect maps, sets, and weakmaps. */
-var dataViewCtorString = toSource(DataView),
-    mapCtorString = toSource(Map),
-    promiseCtorString = toSource(Promise),
-    setCtorString = toSource(Set),
-    weakMapCtorString = toSource(WeakMap);
-
-/** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
-    symbolValueOf = symbolProto ? symbolProto.valueOf : undefined,
-    symbolToString = symbolProto ? symbolProto.toString : undefined;
-
-/**
- * Creates a hash object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function Hash(entries) {
-  var index = -1,
-      length = entries ? entries.length : 0;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the hash.
- *
- * @private
- * @name clear
- * @memberOf Hash
- */
-function hashClear() {
-  this.__data__ = nativeCreate ? nativeCreate(null) : {};
-}
-
-/**
- * Removes `key` and its value from the hash.
- *
- * @private
- * @name delete
- * @memberOf Hash
- * @param {Object} hash The hash to modify.
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function hashDelete(key) {
-  return this.has(key) && delete this.__data__[key];
-}
-
-/**
- * Gets the hash value for `key`.
- *
- * @private
- * @name get
- * @memberOf Hash
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function hashGet(key) {
-  var data = this.__data__;
-  if (nativeCreate) {
-    var result = data[key];
-    return result === HASH_UNDEFINED ? undefined : result;
-  }
-  return hasOwnProperty.call(data, key) ? data[key] : undefined;
-}
-
-/**
- * Checks if a hash value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Hash
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function hashHas(key) {
-  var data = this.__data__;
-  return nativeCreate ? data[key] !== undefined : hasOwnProperty.call(data, key);
-}
-
-/**
- * Sets the hash `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Hash
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the hash instance.
- */
-function hashSet(key, value) {
-  var data = this.__data__;
-  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
-  return this;
-}
-
-// Add methods to `Hash`.
-Hash.prototype.clear = hashClear;
-Hash.prototype['delete'] = hashDelete;
-Hash.prototype.get = hashGet;
-Hash.prototype.has = hashHas;
-Hash.prototype.set = hashSet;
-
-/**
- * Creates an list cache object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function ListCache(entries) {
-  var index = -1,
-      length = entries ? entries.length : 0;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the list cache.
- *
- * @private
- * @name clear
- * @memberOf ListCache
- */
-function listCacheClear() {
-  this.__data__ = [];
-}
-
-/**
- * Removes `key` and its value from the list cache.
- *
- * @private
- * @name delete
- * @memberOf ListCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function listCacheDelete(key) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  if (index < 0) {
-    return false;
-  }
-  var lastIndex = data.length - 1;
-  if (index == lastIndex) {
-    data.pop();
-  } else {
-    splice.call(data, index, 1);
-  }
-  return true;
-}
-
-/**
- * Gets the list cache value for `key`.
- *
- * @private
- * @name get
- * @memberOf ListCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function listCacheGet(key) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  return index < 0 ? undefined : data[index][1];
-}
-
-/**
- * Checks if a list cache value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf ListCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function listCacheHas(key) {
-  return assocIndexOf(this.__data__, key) > -1;
-}
-
-/**
- * Sets the list cache `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf ListCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the list cache instance.
- */
-function listCacheSet(key, value) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  if (index < 0) {
-    data.push([key, value]);
-  } else {
-    data[index][1] = value;
-  }
-  return this;
-}
-
-// Add methods to `ListCache`.
-ListCache.prototype.clear = listCacheClear;
-ListCache.prototype['delete'] = listCacheDelete;
-ListCache.prototype.get = listCacheGet;
-ListCache.prototype.has = listCacheHas;
-ListCache.prototype.set = listCacheSet;
-
-/**
- * Creates a map cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function MapCache(entries) {
-  var index = -1,
-      length = entries ? entries.length : 0;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the map.
- *
- * @private
- * @name clear
- * @memberOf MapCache
- */
-function mapCacheClear() {
-  this.__data__ = {
-    'hash': new Hash,
-    'map': new (Map || ListCache),
-    'string': new Hash
-  };
-}
-
-/**
- * Removes `key` and its value from the map.
- *
- * @private
- * @name delete
- * @memberOf MapCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function mapCacheDelete(key) {
-  return getMapData(this, key)['delete'](key);
-}
-
-/**
- * Gets the map value for `key`.
- *
- * @private
- * @name get
- * @memberOf MapCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function mapCacheGet(key) {
-  return getMapData(this, key).get(key);
-}
-
-/**
- * Checks if a map value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf MapCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function mapCacheHas(key) {
-  return getMapData(this, key).has(key);
-}
-
-/**
- * Sets the map `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf MapCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the map cache instance.
- */
-function mapCacheSet(key, value) {
-  getMapData(this, key).set(key, value);
-  return this;
-}
-
-// Add methods to `MapCache`.
-MapCache.prototype.clear = mapCacheClear;
-MapCache.prototype['delete'] = mapCacheDelete;
-MapCache.prototype.get = mapCacheGet;
-MapCache.prototype.has = mapCacheHas;
-MapCache.prototype.set = mapCacheSet;
-
-/**
- *
- * Creates an array cache object to store unique values.
- *
- * @private
- * @constructor
- * @param {Array} [values] The values to cache.
- */
-function SetCache(values) {
-  var index = -1,
-      length = values ? values.length : 0;
-
-  this.__data__ = new MapCache;
-  while (++index < length) {
-    this.add(values[index]);
-  }
-}
-
-/**
- * Adds `value` to the array cache.
- *
- * @private
- * @name add
- * @memberOf SetCache
- * @alias push
- * @param {*} value The value to cache.
- * @returns {Object} Returns the cache instance.
- */
-function setCacheAdd(value) {
-  this.__data__.set(value, HASH_UNDEFINED);
-  return this;
-}
-
-/**
- * Checks if `value` is in the array cache.
- *
- * @private
- * @name has
- * @memberOf SetCache
- * @param {*} value The value to search for.
- * @returns {number} Returns `true` if `value` is found, else `false`.
- */
-function setCacheHas(value) {
-  return this.__data__.has(value);
-}
-
-// Add methods to `SetCache`.
-SetCache.prototype.add = SetCache.prototype.push = setCacheAdd;
-SetCache.prototype.has = setCacheHas;
-
-/**
- * Creates a stack cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function Stack(entries) {
-  this.__data__ = new ListCache(entries);
-}
-
-/**
- * Removes all key-value entries from the stack.
- *
- * @private
- * @name clear
- * @memberOf Stack
- */
-function stackClear() {
-  this.__data__ = new ListCache;
-}
-
-/**
- * Removes `key` and its value from the stack.
- *
- * @private
- * @name delete
- * @memberOf Stack
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function stackDelete(key) {
-  return this.__data__['delete'](key);
-}
-
-/**
- * Gets the stack value for `key`.
- *
- * @private
- * @name get
- * @memberOf Stack
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function stackGet(key) {
-  return this.__data__.get(key);
-}
-
-/**
- * Checks if a stack value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Stack
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function stackHas(key) {
-  return this.__data__.has(key);
-}
-
-/**
- * Sets the stack `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Stack
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the stack cache instance.
- */
-function stackSet(key, value) {
-  var cache = this.__data__;
-  if (cache instanceof ListCache) {
-    var pairs = cache.__data__;
-    if (!Map || (pairs.length < LARGE_ARRAY_SIZE - 1)) {
-      pairs.push([key, value]);
-      return this;
-    }
-    cache = this.__data__ = new MapCache(pairs);
-  }
-  cache.set(key, value);
-  return this;
-}
-
-// Add methods to `Stack`.
-Stack.prototype.clear = stackClear;
-Stack.prototype['delete'] = stackDelete;
-Stack.prototype.get = stackGet;
-Stack.prototype.has = stackHas;
-Stack.prototype.set = stackSet;
-
-/**
- * Creates an array of the enumerable property names of the array-like `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @param {boolean} inherited Specify returning inherited property names.
- * @returns {Array} Returns the array of property names.
- */
-function arrayLikeKeys(value, inherited) {
-  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
-  // Safari 9 makes `arguments.length` enumerable in strict mode.
-  var result = (isArray(value) || isArguments(value))
-    ? baseTimes(value.length, String)
-    : [];
-
-  var length = result.length,
-      skipIndexes = !!length;
-
-  for (var key in value) {
-    if ((inherited || hasOwnProperty.call(value, key)) &&
-        !(skipIndexes && (key == 'length' || isIndex(key, length)))) {
-      result.push(key);
-    }
-  }
-  return result;
-}
-
-/**
- * Gets the index at which the `key` is found in `array` of key-value pairs.
- *
- * @private
- * @param {Array} array The array to inspect.
- * @param {*} key The key to search for.
- * @returns {number} Returns the index of the matched value, else `-1`.
- */
-function assocIndexOf(array, key) {
-  var length = array.length;
-  while (length--) {
-    if (eq(array[length][0], key)) {
-      return length;
-    }
-  }
-  return -1;
-}
-
-/**
- * The base implementation of `_.get` without support for default values.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @returns {*} Returns the resolved value.
- */
-function baseGet(object, path) {
-  path = isKey(path, object) ? [path] : castPath(path);
-
-  var index = 0,
-      length = path.length;
-
-  while (object != null && index < length) {
-    object = object[toKey(path[index++])];
-  }
-  return (index && index == length) ? object : undefined;
-}
-
-/**
- * The base implementation of `getTag`.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */
-function baseGetTag(value) {
-  return objectToString.call(value);
-}
-
-/**
- * The base implementation of `_.hasIn` without support for deep paths.
- *
- * @private
- * @param {Object} [object] The object to query.
- * @param {Array|string} key The key to check.
- * @returns {boolean} Returns `true` if `key` exists, else `false`.
- */
-function baseHasIn(object, key) {
-  return object != null && key in Object(object);
-}
-
-/**
- * The base implementation of `_.isEqual` which supports partial comparisons
- * and tracks traversed objects.
- *
- * @private
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {boolean} [bitmask] The bitmask of comparison flags.
- *  The bitmask may be composed of the following flags:
- *     1 - Unordered comparison
- *     2 - Partial comparison
- * @param {Object} [stack] Tracks traversed `value` and `other` objects.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- */
-function baseIsEqual(value, other, customizer, bitmask, stack) {
-  if (value === other) {
-    return true;
-  }
-  if (value == null || other == null || (!isObject(value) && !isObjectLike(other))) {
-    return value !== value && other !== other;
-  }
-  return baseIsEqualDeep(value, other, baseIsEqual, customizer, bitmask, stack);
-}
-
-/**
- * A specialized version of `baseIsEqual` for arrays and objects which performs
- * deep comparisons and tracks traversed objects enabling objects with circular
- * references to be compared.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} [customizer] The function to customize comparisons.
- * @param {number} [bitmask] The bitmask of comparison flags. See `baseIsEqual`
- *  for more details.
- * @param {Object} [stack] Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function baseIsEqualDeep(object, other, equalFunc, customizer, bitmask, stack) {
-  var objIsArr = isArray(object),
-      othIsArr = isArray(other),
-      objTag = arrayTag,
-      othTag = arrayTag;
-
-  if (!objIsArr) {
-    objTag = getTag(object);
-    objTag = objTag == argsTag ? objectTag : objTag;
-  }
-  if (!othIsArr) {
-    othTag = getTag(other);
-    othTag = othTag == argsTag ? objectTag : othTag;
-  }
-  var objIsObj = objTag == objectTag && !isHostObject(object),
-      othIsObj = othTag == objectTag && !isHostObject(other),
-      isSameTag = objTag == othTag;
-
-  if (isSameTag && !objIsObj) {
-    stack || (stack = new Stack);
-    return (objIsArr || isTypedArray(object))
-      ? equalArrays(object, other, equalFunc, customizer, bitmask, stack)
-      : equalByTag(object, other, objTag, equalFunc, customizer, bitmask, stack);
-  }
-  if (!(bitmask & PARTIAL_COMPARE_FLAG)) {
-    var objIsWrapped = objIsObj && hasOwnProperty.call(object, '__wrapped__'),
-        othIsWrapped = othIsObj && hasOwnProperty.call(other, '__wrapped__');
-
-    if (objIsWrapped || othIsWrapped) {
-      var objUnwrapped = objIsWrapped ? object.value() : object,
-          othUnwrapped = othIsWrapped ? other.value() : other;
-
-      stack || (stack = new Stack);
-      return equalFunc(objUnwrapped, othUnwrapped, customizer, bitmask, stack);
-    }
-  }
-  if (!isSameTag) {
-    return false;
-  }
-  stack || (stack = new Stack);
-  return equalObjects(object, other, equalFunc, customizer, bitmask, stack);
-}
-
-/**
- * The base implementation of `_.isMatch` without support for iteratee shorthands.
- *
- * @private
- * @param {Object} object The object to inspect.
- * @param {Object} source The object of property values to match.
- * @param {Array} matchData The property names, values, and compare flags to match.
- * @param {Function} [customizer] The function to customize comparisons.
- * @returns {boolean} Returns `true` if `object` is a match, else `false`.
- */
-function baseIsMatch(object, source, matchData, customizer) {
-  var index = matchData.length,
-      length = index,
-      noCustomizer = !customizer;
-
-  if (object == null) {
-    return !length;
-  }
-  object = Object(object);
-  while (index--) {
-    var data = matchData[index];
-    if ((noCustomizer && data[2])
-          ? data[1] !== object[data[0]]
-          : !(data[0] in object)
-        ) {
-      return false;
-    }
-  }
-  while (++index < length) {
-    data = matchData[index];
-    var key = data[0],
-        objValue = object[key],
-        srcValue = data[1];
-
-    if (noCustomizer && data[2]) {
-      if (objValue === undefined && !(key in object)) {
-        return false;
-      }
-    } else {
-      var stack = new Stack;
-      if (customizer) {
-        var result = customizer(objValue, srcValue, key, object, source, stack);
-      }
-      if (!(result === undefined
-            ? baseIsEqual(srcValue, objValue, customizer, UNORDERED_COMPARE_FLAG | PARTIAL_COMPARE_FLAG, stack)
-            : result
-          )) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-/**
- * The base implementation of `_.isNative` without bad shim checks.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a native function,
- *  else `false`.
- */
-function baseIsNative(value) {
-  if (!isObject(value) || isMasked(value)) {
-    return false;
-  }
-  var pattern = (isFunction(value) || isHostObject(value)) ? reIsNative : reIsHostCtor;
-  return pattern.test(toSource(value));
-}
-
-/**
- * The base implementation of `_.isTypedArray` without Node.js optimizations.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- */
-function baseIsTypedArray(value) {
-  return isObjectLike(value) &&
-    isLength(value.length) && !!typedArrayTags[objectToString.call(value)];
-}
-
-/**
- * The base implementation of `_.iteratee`.
- *
- * @private
- * @param {*} [value=_.identity] The value to convert to an iteratee.
- * @returns {Function} Returns the iteratee.
- */
-function baseIteratee(value) {
-  // Don't store the `typeof` result in a variable to avoid a JIT bug in Safari 9.
-  // See https://bugs.webkit.org/show_bug.cgi?id=156034 for more details.
-  if (typeof value == 'function') {
-    return value;
-  }
-  if (value == null) {
-    return identity;
-  }
-  if (typeof value == 'object') {
-    return isArray(value)
-      ? baseMatchesProperty(value[0], value[1])
-      : baseMatches(value);
-  }
-  return property(value);
-}
-
-/**
- * The base implementation of `_.keys` which doesn't treat sparse arrays as dense.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- */
-function baseKeys(object) {
-  if (!isPrototype(object)) {
-    return nativeKeys(object);
-  }
-  var result = [];
-  for (var key in Object(object)) {
-    if (hasOwnProperty.call(object, key) && key != 'constructor') {
-      result.push(key);
-    }
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.matches` which doesn't clone `source`.
- *
- * @private
- * @param {Object} source The object of property values to match.
- * @returns {Function} Returns the new spec function.
- */
-function baseMatches(source) {
-  var matchData = getMatchData(source);
-  if (matchData.length == 1 && matchData[0][2]) {
-    return matchesStrictComparable(matchData[0][0], matchData[0][1]);
-  }
-  return function(object) {
-    return object === source || baseIsMatch(object, source, matchData);
-  };
-}
-
-/**
- * The base implementation of `_.matchesProperty` which doesn't clone `srcValue`.
- *
- * @private
- * @param {string} path The path of the property to get.
- * @param {*} srcValue The value to match.
- * @returns {Function} Returns the new spec function.
- */
-function baseMatchesProperty(path, srcValue) {
-  if (isKey(path) && isStrictComparable(srcValue)) {
-    return matchesStrictComparable(toKey(path), srcValue);
-  }
-  return function(object) {
-    var objValue = get(object, path);
-    return (objValue === undefined && objValue === srcValue)
-      ? hasIn(object, path)
-      : baseIsEqual(srcValue, objValue, undefined, UNORDERED_COMPARE_FLAG | PARTIAL_COMPARE_FLAG);
-  };
-}
-
-/**
- * A specialized version of `baseProperty` which supports deep paths.
- *
- * @private
- * @param {Array|string} path The path of the property to get.
- * @returns {Function} Returns the new accessor function.
- */
-function basePropertyDeep(path) {
-  return function(object) {
-    return baseGet(object, path);
-  };
-}
-
-/**
- * The base implementation of `_.toString` which doesn't convert nullish
- * values to empty strings.
- *
- * @private
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- */
-function baseToString(value) {
-  // Exit early for strings to avoid a performance hit in some environments.
-  if (typeof value == 'string') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return symbolToString ? symbolToString.call(value) : '';
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-/**
- * Casts `value` to a path array if it's not one.
- *
- * @private
- * @param {*} value The value to inspect.
- * @returns {Array} Returns the cast property path array.
- */
-function castPath(value) {
-  return isArray(value) ? value : stringToPath(value);
-}
-
-/**
- * Creates a `_.find` or `_.findLast` function.
- *
- * @private
- * @param {Function} findIndexFunc The function to find the collection index.
- * @returns {Function} Returns the new find function.
- */
-function createFind(findIndexFunc) {
-  return function(collection, predicate, fromIndex) {
-    var iterable = Object(collection);
-    if (!isArrayLike(collection)) {
-      var iteratee = baseIteratee(predicate, 3);
-      collection = keys(collection);
-      predicate = function(key) { return iteratee(iterable[key], key, iterable); };
-    }
-    var index = findIndexFunc(collection, predicate, fromIndex);
-    return index > -1 ? iterable[iteratee ? collection[index] : index] : undefined;
-  };
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for arrays with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Array} array The array to compare.
- * @param {Array} other The other array to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} customizer The function to customize comparisons.
- * @param {number} bitmask The bitmask of comparison flags. See `baseIsEqual`
- *  for more details.
- * @param {Object} stack Tracks traversed `array` and `other` objects.
- * @returns {boolean} Returns `true` if the arrays are equivalent, else `false`.
- */
-function equalArrays(array, other, equalFunc, customizer, bitmask, stack) {
-  var isPartial = bitmask & PARTIAL_COMPARE_FLAG,
-      arrLength = array.length,
-      othLength = other.length;
-
-  if (arrLength != othLength && !(isPartial && othLength > arrLength)) {
-    return false;
-  }
-  // Assume cyclic values are equal.
-  var stacked = stack.get(array);
-  if (stacked && stack.get(other)) {
-    return stacked == other;
-  }
-  var index = -1,
-      result = true,
-      seen = (bitmask & UNORDERED_COMPARE_FLAG) ? new SetCache : undefined;
-
-  stack.set(array, other);
-  stack.set(other, array);
-
-  // Ignore non-index properties.
-  while (++index < arrLength) {
-    var arrValue = array[index],
-        othValue = other[index];
-
-    if (customizer) {
-      var compared = isPartial
-        ? customizer(othValue, arrValue, index, other, array, stack)
-        : customizer(arrValue, othValue, index, array, other, stack);
-    }
-    if (compared !== undefined) {
-      if (compared) {
-        continue;
-      }
-      result = false;
-      break;
-    }
-    // Recursively compare arrays (susceptible to call stack limits).
-    if (seen) {
-      if (!arraySome(other, function(othValue, othIndex) {
-            if (!seen.has(othIndex) &&
-                (arrValue === othValue || equalFunc(arrValue, othValue, customizer, bitmask, stack))) {
-              return seen.add(othIndex);
-            }
-          })) {
-        result = false;
-        break;
-      }
-    } else if (!(
-          arrValue === othValue ||
-            equalFunc(arrValue, othValue, customizer, bitmask, stack)
-        )) {
-      result = false;
-      break;
-    }
-  }
-  stack['delete'](array);
-  stack['delete'](other);
-  return result;
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for comparing objects of
- * the same `toStringTag`.
- *
- * **Note:** This function only supports comparing values with tags of
- * `Boolean`, `Date`, `Error`, `Number`, `RegExp`, or `String`.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {string} tag The `toStringTag` of the objects to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} customizer The function to customize comparisons.
- * @param {number} bitmask The bitmask of comparison flags. See `baseIsEqual`
- *  for more details.
- * @param {Object} stack Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function equalByTag(object, other, tag, equalFunc, customizer, bitmask, stack) {
-  switch (tag) {
-    case dataViewTag:
-      if ((object.byteLength != other.byteLength) ||
-          (object.byteOffset != other.byteOffset)) {
-        return false;
-      }
-      object = object.buffer;
-      other = other.buffer;
-
-    case arrayBufferTag:
-      if ((object.byteLength != other.byteLength) ||
-          !equalFunc(new Uint8Array(object), new Uint8Array(other))) {
-        return false;
-      }
-      return true;
-
-    case boolTag:
-    case dateTag:
-    case numberTag:
-      // Coerce booleans to `1` or `0` and dates to milliseconds.
-      // Invalid dates are coerced to `NaN`.
-      return eq(+object, +other);
-
-    case errorTag:
-      return object.name == other.name && object.message == other.message;
-
-    case regexpTag:
-    case stringTag:
-      // Coerce regexes to strings and treat strings, primitives and objects,
-      // as equal. See http://www.ecma-international.org/ecma-262/7.0/#sec-regexp.prototype.tostring
-      // for more details.
-      return object == (other + '');
-
-    case mapTag:
-      var convert = mapToArray;
-
-    case setTag:
-      var isPartial = bitmask & PARTIAL_COMPARE_FLAG;
-      convert || (convert = setToArray);
-
-      if (object.size != other.size && !isPartial) {
-        return false;
-      }
-      // Assume cyclic values are equal.
-      var stacked = stack.get(object);
-      if (stacked) {
-        return stacked == other;
-      }
-      bitmask |= UNORDERED_COMPARE_FLAG;
-
-      // Recursively compare objects (susceptible to call stack limits).
-      stack.set(object, other);
-      var result = equalArrays(convert(object), convert(other), equalFunc, customizer, bitmask, stack);
-      stack['delete'](object);
-      return result;
-
-    case symbolTag:
-      if (symbolValueOf) {
-        return symbolValueOf.call(object) == symbolValueOf.call(other);
-      }
-  }
-  return false;
-}
-
-/**
- * A specialized version of `baseIsEqualDeep` for objects with support for
- * partial deep comparisons.
- *
- * @private
- * @param {Object} object The object to compare.
- * @param {Object} other The other object to compare.
- * @param {Function} equalFunc The function to determine equivalents of values.
- * @param {Function} customizer The function to customize comparisons.
- * @param {number} bitmask The bitmask of comparison flags. See `baseIsEqual`
- *  for more details.
- * @param {Object} stack Tracks traversed `object` and `other` objects.
- * @returns {boolean} Returns `true` if the objects are equivalent, else `false`.
- */
-function equalObjects(object, other, equalFunc, customizer, bitmask, stack) {
-  var isPartial = bitmask & PARTIAL_COMPARE_FLAG,
-      objProps = keys(object),
-      objLength = objProps.length,
-      othProps = keys(other),
-      othLength = othProps.length;
-
-  if (objLength != othLength && !isPartial) {
-    return false;
-  }
-  var index = objLength;
-  while (index--) {
-    var key = objProps[index];
-    if (!(isPartial ? key in other : hasOwnProperty.call(other, key))) {
-      return false;
-    }
-  }
-  // Assume cyclic values are equal.
-  var stacked = stack.get(object);
-  if (stacked && stack.get(other)) {
-    return stacked == other;
-  }
-  var result = true;
-  stack.set(object, other);
-  stack.set(other, object);
-
-  var skipCtor = isPartial;
-  while (++index < objLength) {
-    key = objProps[index];
-    var objValue = object[key],
-        othValue = other[key];
-
-    if (customizer) {
-      var compared = isPartial
-        ? customizer(othValue, objValue, key, other, object, stack)
-        : customizer(objValue, othValue, key, object, other, stack);
-    }
-    // Recursively compare objects (susceptible to call stack limits).
-    if (!(compared === undefined
-          ? (objValue === othValue || equalFunc(objValue, othValue, customizer, bitmask, stack))
-          : compared
-        )) {
-      result = false;
-      break;
-    }
-    skipCtor || (skipCtor = key == 'constructor');
-  }
-  if (result && !skipCtor) {
-    var objCtor = object.constructor,
-        othCtor = other.constructor;
-
-    // Non `Object` object instances with different constructors are not equal.
-    if (objCtor != othCtor &&
-        ('constructor' in object && 'constructor' in other) &&
-        !(typeof objCtor == 'function' && objCtor instanceof objCtor &&
-          typeof othCtor == 'function' && othCtor instanceof othCtor)) {
-      result = false;
-    }
-  }
-  stack['delete'](object);
-  stack['delete'](other);
-  return result;
-}
-
-/**
- * Gets the data for `map`.
- *
- * @private
- * @param {Object} map The map to query.
- * @param {string} key The reference key.
- * @returns {*} Returns the map data.
- */
-function getMapData(map, key) {
-  var data = map.__data__;
-  return isKeyable(key)
-    ? data[typeof key == 'string' ? 'string' : 'hash']
-    : data.map;
-}
-
-/**
- * Gets the property names, values, and compare flags of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the match data of `object`.
- */
-function getMatchData(object) {
-  var result = keys(object),
-      length = result.length;
-
-  while (length--) {
-    var key = result[length],
-        value = object[key];
-
-    result[length] = [key, value, isStrictComparable(value)];
-  }
-  return result;
-}
-
-/**
- * Gets the native function at `key` of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the method to get.
- * @returns {*} Returns the function if it's native, else `undefined`.
- */
-function getNative(object, key) {
-  var value = getValue(object, key);
-  return baseIsNative(value) ? value : undefined;
-}
-
-/**
- * Gets the `toStringTag` of `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */
-var getTag = baseGetTag;
-
-// Fallback for data views, maps, sets, and weak maps in IE 11,
-// for data views in Edge < 14, and promises in Node.js.
-if ((DataView && getTag(new DataView(new ArrayBuffer(1))) != dataViewTag) ||
-    (Map && getTag(new Map) != mapTag) ||
-    (Promise && getTag(Promise.resolve()) != promiseTag) ||
-    (Set && getTag(new Set) != setTag) ||
-    (WeakMap && getTag(new WeakMap) != weakMapTag)) {
-  getTag = function(value) {
-    var result = objectToString.call(value),
-        Ctor = result == objectTag ? value.constructor : undefined,
-        ctorString = Ctor ? toSource(Ctor) : undefined;
-
-    if (ctorString) {
-      switch (ctorString) {
-        case dataViewCtorString: return dataViewTag;
-        case mapCtorString: return mapTag;
-        case promiseCtorString: return promiseTag;
-        case setCtorString: return setTag;
-        case weakMapCtorString: return weakMapTag;
-      }
-    }
-    return result;
-  };
-}
-
-/**
- * Checks if `path` exists on `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {Array|string} path The path to check.
- * @param {Function} hasFunc The function to check properties.
- * @returns {boolean} Returns `true` if `path` exists, else `false`.
- */
-function hasPath(object, path, hasFunc) {
-  path = isKey(path, object) ? [path] : castPath(path);
-
-  var result,
-      index = -1,
-      length = path.length;
-
-  while (++index < length) {
-    var key = toKey(path[index]);
-    if (!(result = object != null && hasFunc(object, key))) {
-      break;
-    }
-    object = object[key];
-  }
-  if (result) {
-    return result;
-  }
-  var length = object ? object.length : 0;
-  return !!length && isLength(length) && isIndex(key, length) &&
-    (isArray(object) || isArguments(object));
-}
-
-/**
- * Checks if `value` is a valid array-like index.
- *
- * @private
- * @param {*} value The value to check.
- * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
- * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
- */
-function isIndex(value, length) {
-  length = length == null ? MAX_SAFE_INTEGER : length;
-  return !!length &&
-    (typeof value == 'number' || reIsUint.test(value)) &&
-    (value > -1 && value % 1 == 0 && value < length);
-}
-
-/**
- * Checks if `value` is a property name and not a property path.
- *
- * @private
- * @param {*} value The value to check.
- * @param {Object} [object] The object to query keys on.
- * @returns {boolean} Returns `true` if `value` is a property name, else `false`.
- */
-function isKey(value, object) {
-  if (isArray(value)) {
-    return false;
-  }
-  var type = typeof value;
-  if (type == 'number' || type == 'symbol' || type == 'boolean' ||
-      value == null || isSymbol(value)) {
-    return true;
-  }
-  return reIsPlainProp.test(value) || !reIsDeepProp.test(value) ||
-    (object != null && value in Object(object));
-}
-
-/**
- * Checks if `value` is suitable for use as unique object key.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
- */
-function isKeyable(value) {
-  var type = typeof value;
-  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
-    ? (value !== '__proto__')
-    : (value === null);
-}
-
-/**
- * Checks if `func` has its source masked.
- *
- * @private
- * @param {Function} func The function to check.
- * @returns {boolean} Returns `true` if `func` is masked, else `false`.
- */
-function isMasked(func) {
-  return !!maskSrcKey && (maskSrcKey in func);
-}
-
-/**
- * Checks if `value` is likely a prototype object.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a prototype, else `false`.
- */
-function isPrototype(value) {
-  var Ctor = value && value.constructor,
-      proto = (typeof Ctor == 'function' && Ctor.prototype) || objectProto;
-
-  return value === proto;
-}
-
-/**
- * Checks if `value` is suitable for strict equality comparisons, i.e. `===`.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` if suitable for strict
- *  equality comparisons, else `false`.
- */
-function isStrictComparable(value) {
-  return value === value && !isObject(value);
-}
-
-/**
- * A specialized version of `matchesProperty` for source values suitable
- * for strict equality comparisons, i.e. `===`.
- *
- * @private
- * @param {string} key The key of the property to get.
- * @param {*} srcValue The value to match.
- * @returns {Function} Returns the new spec function.
- */
-function matchesStrictComparable(key, srcValue) {
-  return function(object) {
-    if (object == null) {
-      return false;
-    }
-    return object[key] === srcValue &&
-      (srcValue !== undefined || (key in Object(object)));
-  };
-}
-
-/**
- * Converts `string` to a property path array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the property path array.
- */
-var stringToPath = memoize(function(string) {
-  string = toString(string);
-
-  var result = [];
-  if (reLeadingDot.test(string)) {
-    result.push('');
-  }
-  string.replace(rePropName, function(match, number, quote, string) {
-    result.push(quote ? string.replace(reEscapeChar, '$1') : (number || match));
-  });
-  return result;
-});
-
-/**
- * Converts `value` to a string key if it's not a string or symbol.
- *
- * @private
- * @param {*} value The value to inspect.
- * @returns {string|symbol} Returns the key.
- */
-function toKey(value) {
-  if (typeof value == 'string' || isSymbol(value)) {
-    return value;
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-/**
- * Converts `func` to its source code.
- *
- * @private
- * @param {Function} func The function to process.
- * @returns {string} Returns the source code.
- */
-function toSource(func) {
-  if (func != null) {
-    try {
-      return funcToString.call(func);
-    } catch (e) {}
-    try {
-      return (func + '');
-    } catch (e) {}
-  }
-  return '';
-}
-
-/**
- * This method is like `_.find` except that it returns the index of the first
- * element `predicate` returns truthy for instead of the element itself.
- *
- * @static
- * @memberOf _
- * @since 1.1.0
- * @category Array
- * @param {Array} array The array to inspect.
- * @param {Function} [predicate=_.identity]
- *  The function invoked per iteration.
- * @param {number} [fromIndex=0] The index to search from.
- * @returns {number} Returns the index of the found element, else `-1`.
- * @example
- *
- * var users = [
- *   { 'user': 'barney',  'active': false },
- *   { 'user': 'fred',    'active': false },
- *   { 'user': 'pebbles', 'active': true }
- * ];
- *
- * _.findIndex(users, function(o) { return o.user == 'barney'; });
- * // => 0
- *
- * // The `_.matches` iteratee shorthand.
- * _.findIndex(users, { 'user': 'fred', 'active': false });
- * // => 1
- *
- * // The `_.matchesProperty` iteratee shorthand.
- * _.findIndex(users, ['active', false]);
- * // => 0
- *
- * // The `_.property` iteratee shorthand.
- * _.findIndex(users, 'active');
- * // => 2
- */
-function findIndex(array, predicate, fromIndex) {
-  var length = array ? array.length : 0;
-  if (!length) {
-    return -1;
-  }
-  var index = fromIndex == null ? 0 : toInteger(fromIndex);
-  if (index < 0) {
-    index = nativeMax(length + index, 0);
-  }
-  return baseFindIndex(array, baseIteratee(predicate, 3), index);
-}
-
-/**
- * Iterates over elements of `collection`, returning the first element
- * `predicate` returns truthy for. The predicate is invoked with three
- * arguments: (value, index|key, collection).
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Collection
- * @param {Array|Object} collection The collection to inspect.
- * @param {Function} [predicate=_.identity]
- *  The function invoked per iteration.
- * @param {number} [fromIndex=0] The index to search from.
- * @returns {*} Returns the matched element, else `undefined`.
- * @example
- *
- * var users = [
- *   { 'user': 'barney',  'age': 36, 'active': true },
- *   { 'user': 'fred',    'age': 40, 'active': false },
- *   { 'user': 'pebbles', 'age': 1,  'active': true }
- * ];
- *
- * _.find(users, function(o) { return o.age < 40; });
- * // => object for 'barney'
- *
- * // The `_.matches` iteratee shorthand.
- * _.find(users, { 'age': 1, 'active': true });
- * // => object for 'pebbles'
- *
- * // The `_.matchesProperty` iteratee shorthand.
- * _.find(users, ['active', false]);
- * // => object for 'fred'
- *
- * // The `_.property` iteratee shorthand.
- * _.find(users, 'active');
- * // => object for 'barney'
- */
-var find = createFind(findIndex);
-
-/**
- * Creates a function that memoizes the result of `func`. If `resolver` is
- * provided, it determines the cache key for storing the result based on the
- * arguments provided to the memoized function. By default, the first argument
- * provided to the memoized function is used as the map cache key. The `func`
- * is invoked with the `this` binding of the memoized function.
- *
- * **Note:** The cache is exposed as the `cache` property on the memoized
- * function. Its creation may be customized by replacing the `_.memoize.Cache`
- * constructor with one whose instances implement the
- * [`Map`](http://ecma-international.org/ecma-262/7.0/#sec-properties-of-the-map-prototype-object)
- * method interface of `delete`, `get`, `has`, and `set`.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Function
- * @param {Function} func The function to have its output memoized.
- * @param {Function} [resolver] The function to resolve the cache key.
- * @returns {Function} Returns the new memoized function.
- * @example
- *
- * var object = { 'a': 1, 'b': 2 };
- * var other = { 'c': 3, 'd': 4 };
- *
- * var values = _.memoize(_.values);
- * values(object);
- * // => [1, 2]
- *
- * values(other);
- * // => [3, 4]
- *
- * object.a = 2;
- * values(object);
- * // => [1, 2]
- *
- * // Modify the result cache.
- * values.cache.set(object, ['a', 'b']);
- * values(object);
- * // => ['a', 'b']
- *
- * // Replace `_.memoize.Cache`.
- * _.memoize.Cache = WeakMap;
- */
-function memoize(func, resolver) {
-  if (typeof func != 'function' || (resolver && typeof resolver != 'function')) {
-    throw new TypeError(FUNC_ERROR_TEXT);
-  }
-  var memoized = function() {
-    var args = arguments,
-        key = resolver ? resolver.apply(this, args) : args[0],
-        cache = memoized.cache;
-
-    if (cache.has(key)) {
-      return cache.get(key);
-    }
-    var result = func.apply(this, args);
-    memoized.cache = cache.set(key, result);
-    return result;
-  };
-  memoized.cache = new (memoize.Cache || MapCache);
-  return memoized;
-}
-
-// Assign cache to `_.memoize`.
-memoize.Cache = MapCache;
-
-/**
- * Performs a
- * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
- * comparison between two values to determine if they are equivalent.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'a': 1 };
- * var other = { 'a': 1 };
- *
- * _.eq(object, object);
- * // => true
- *
- * _.eq(object, other);
- * // => false
- *
- * _.eq('a', 'a');
- * // => true
- *
- * _.eq('a', Object('a'));
- * // => false
- *
- * _.eq(NaN, NaN);
- * // => true
- */
-function eq(value, other) {
-  return value === other || (value !== value && other !== other);
-}
-
-/**
- * Checks if `value` is likely an `arguments` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an `arguments` object,
- *  else `false`.
- * @example
- *
- * _.isArguments(function() { return arguments; }());
- * // => true
- *
- * _.isArguments([1, 2, 3]);
- * // => false
- */
-function isArguments(value) {
-  // Safari 8.1 makes `arguments.callee` enumerable in strict mode.
-  return isArrayLikeObject(value) && hasOwnProperty.call(value, 'callee') &&
-    (!propertyIsEnumerable.call(value, 'callee') || objectToString.call(value) == argsTag);
-}
-
-/**
- * Checks if `value` is classified as an `Array` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array, else `false`.
- * @example
- *
- * _.isArray([1, 2, 3]);
- * // => true
- *
- * _.isArray(document.body.children);
- * // => false
- *
- * _.isArray('abc');
- * // => false
- *
- * _.isArray(_.noop);
- * // => false
- */
-var isArray = Array.isArray;
-
-/**
- * Checks if `value` is array-like. A value is considered array-like if it's
- * not a function and has a `value.length` that's an integer greater than or
- * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
- * @example
- *
- * _.isArrayLike([1, 2, 3]);
- * // => true
- *
- * _.isArrayLike(document.body.children);
- * // => true
- *
- * _.isArrayLike('abc');
- * // => true
- *
- * _.isArrayLike(_.noop);
- * // => false
- */
-function isArrayLike(value) {
-  return value != null && isLength(value.length) && !isFunction(value);
-}
-
-/**
- * This method is like `_.isArrayLike` except that it also checks if `value`
- * is an object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array-like object,
- *  else `false`.
- * @example
- *
- * _.isArrayLikeObject([1, 2, 3]);
- * // => true
- *
- * _.isArrayLikeObject(document.body.children);
- * // => true
- *
- * _.isArrayLikeObject('abc');
- * // => false
- *
- * _.isArrayLikeObject(_.noop);
- * // => false
- */
-function isArrayLikeObject(value) {
-  return isObjectLike(value) && isArrayLike(value);
-}
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a function, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 8-9 which returns 'object' for typed array and other constructors.
-  var tag = isObject(value) ? objectToString.call(value) : '';
-  return tag == funcTag || tag == genTag;
-}
-
-/**
- * Checks if `value` is a valid array-like length.
- *
- * **Note:** This method is loosely based on
- * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
- * @example
- *
- * _.isLength(3);
- * // => true
- *
- * _.isLength(Number.MIN_VALUE);
- * // => false
- *
- * _.isLength(Infinity);
- * // => false
- *
- * _.isLength('3');
- * // => false
- */
-function isLength(value) {
-  return typeof value == 'number' &&
-    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && objectToString.call(value) == symbolTag);
-}
-
-/**
- * Checks if `value` is classified as a typed array.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- * @example
- *
- * _.isTypedArray(new Uint8Array);
- * // => true
- *
- * _.isTypedArray([]);
- * // => false
- */
-var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
-
-/**
- * Converts `value` to a finite number.
- *
- * @static
- * @memberOf _
- * @since 4.12.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted number.
- * @example
- *
- * _.toFinite(3.2);
- * // => 3.2
- *
- * _.toFinite(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toFinite(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toFinite('3.2');
- * // => 3.2
- */
-function toFinite(value) {
-  if (!value) {
-    return value === 0 ? value : 0;
-  }
-  value = toNumber(value);
-  if (value === INFINITY || value === -INFINITY) {
-    var sign = (value < 0 ? -1 : 1);
-    return sign * MAX_INTEGER;
-  }
-  return value === value ? value : 0;
-}
-
-/**
- * Converts `value` to an integer.
- *
- * **Note:** This method is loosely based on
- * [`ToInteger`](http://www.ecma-international.org/ecma-262/7.0/#sec-tointeger).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted integer.
- * @example
- *
- * _.toInteger(3.2);
- * // => 3
- *
- * _.toInteger(Number.MIN_VALUE);
- * // => 0
- *
- * _.toInteger(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toInteger('3.2');
- * // => 3
- */
-function toInteger(value) {
-  var result = toFinite(value),
-      remainder = result % 1;
-
-  return result === result ? (remainder ? result - remainder : result) : 0;
-}
-
-/**
- * Converts `value` to a number.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {number} Returns the number.
- * @example
- *
- * _.toNumber(3.2);
- * // => 3.2
- *
- * _.toNumber(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toNumber(Infinity);
- * // => Infinity
- *
- * _.toNumber('3.2');
- * // => 3.2
- */
-function toNumber(value) {
-  if (typeof value == 'number') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return NAN;
-  }
-  if (isObject(value)) {
-    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
-    value = isObject(other) ? (other + '') : other;
-  }
-  if (typeof value != 'string') {
-    return value === 0 ? value : +value;
-  }
-  value = value.replace(reTrim, '');
-  var isBinary = reIsBinary.test(value);
-  return (isBinary || reIsOctal.test(value))
-    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
-    : (reIsBadHex.test(value) ? NAN : +value);
-}
-
-/**
- * Converts `value` to a string. An empty string is returned for `null`
- * and `undefined` values. The sign of `-0` is preserved.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- * @example
- *
- * _.toString(null);
- * // => ''
- *
- * _.toString(-0);
- * // => '-0'
- *
- * _.toString([1, 2, 3]);
- * // => '1,2,3'
- */
-function toString(value) {
-  return value == null ? '' : baseToString(value);
-}
-
-/**
- * Gets the value at `path` of `object`. If the resolved value is
- * `undefined`, the `defaultValue` is returned in its place.
- *
- * @static
- * @memberOf _
- * @since 3.7.0
- * @category Object
- * @param {Object} object The object to query.
- * @param {Array|string} path The path of the property to get.
- * @param {*} [defaultValue] The value returned for `undefined` resolved values.
- * @returns {*} Returns the resolved value.
- * @example
- *
- * var object = { 'a': [{ 'b': { 'c': 3 } }] };
- *
- * _.get(object, 'a[0].b.c');
- * // => 3
- *
- * _.get(object, ['a', '0', 'b', 'c']);
- * // => 3
- *
- * _.get(object, 'a.b.c', 'default');
- * // => 'default'
- */
-function get(object, path, defaultValue) {
-  var result = object == null ? undefined : baseGet(object, path);
-  return result === undefined ? defaultValue : result;
-}
-
-/**
- * Checks if `path` is a direct or inherited property of `object`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Object
- * @param {Object} object The object to query.
- * @param {Array|string} path The path to check.
- * @returns {boolean} Returns `true` if `path` exists, else `false`.
- * @example
- *
- * var object = _.create({ 'a': _.create({ 'b': 2 }) });
- *
- * _.hasIn(object, 'a');
- * // => true
- *
- * _.hasIn(object, 'a.b');
- * // => true
- *
- * _.hasIn(object, ['a', 'b']);
- * // => true
- *
- * _.hasIn(object, 'b');
- * // => false
- */
-function hasIn(object, path) {
-  return object != null && hasPath(object, path, baseHasIn);
-}
-
-/**
- * Creates an array of the own enumerable property names of `object`.
- *
- * **Note:** Non-object values are coerced to objects. See the
- * [ES spec](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
- * for more details.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Object
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- * @example
- *
- * function Foo() {
- *   this.a = 1;
- *   this.b = 2;
- * }
- *
- * Foo.prototype.c = 3;
- *
- * _.keys(new Foo);
- * // => ['a', 'b'] (iteration order is not guaranteed)
- *
- * _.keys('hi');
- * // => ['0', '1']
- */
-function keys(object) {
-  return isArrayLike(object) ? arrayLikeKeys(object) : baseKeys(object);
-}
-
-/**
- * This method returns the first argument it receives.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Util
- * @param {*} value Any value.
- * @returns {*} Returns `value`.
- * @example
- *
- * var object = { 'a': 1 };
- *
- * console.log(_.identity(object) === object);
- * // => true
- */
-function identity(value) {
-  return value;
-}
-
-/**
- * Creates a function that returns the value at `path` of a given object.
- *
- * @static
- * @memberOf _
- * @since 2.4.0
- * @category Util
- * @param {Array|string} path The path of the property to get.
- * @returns {Function} Returns the new accessor function.
- * @example
- *
- * var objects = [
- *   { 'a': { 'b': 2 } },
- *   { 'a': { 'b': 1 } }
- * ];
- *
- * _.map(objects, _.property('a.b'));
- * // => [2, 1]
- *
- * _.map(_.sortBy(objects, _.property(['a', 'b'])), 'a.b');
- * // => [1, 2]
- */
-function property(path) {
-  return isKey(path) ? baseProperty(toKey(path)) : basePropertyDeep(path);
-}
-
-module.exports = find;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],15:[function(require,module,exports){
-/**
- * lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright jQuery Foundation and other contributors <https://jquery.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** `Object#toString` result references. */
-var symbolTag = '[object Symbol]';
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/6.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/**
- * The base implementation of methods like `_.max` and `_.min` which accepts a
- * `comparator` to determine the extremum value.
- *
- * @private
- * @param {Array} array The array to iterate over.
- * @param {Function} iteratee The iteratee invoked per iteration.
- * @param {Function} comparator The comparator used to compare values.
- * @returns {*} Returns the extremum value.
- */
-function baseExtremum(array, iteratee, comparator) {
-  var index = -1,
-      length = array.length;
-
-  while (++index < length) {
-    var value = array[index],
-        current = iteratee(value);
-
-    if (current != null && (computed === undefined
-          ? (current === current && !isSymbol(current))
-          : comparator(current, computed)
-        )) {
-      var computed = current,
-          result = value;
-    }
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.gt` which doesn't coerce arguments to numbers.
- *
- * @private
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if `value` is greater than `other`,
- *  else `false`.
- */
-function baseGt(value, other) {
-  return value > other;
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is correctly classified,
- *  else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && objectToString.call(value) == symbolTag);
-}
-
-/**
- * This method returns the first argument given to it.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Util
- * @param {*} value Any value.
- * @returns {*} Returns `value`.
- * @example
- *
- * var object = { 'user': 'fred' };
- *
- * _.identity(object) === object;
- * // => true
- */
-function identity(value) {
-  return value;
-}
-
-/**
- * Computes the maximum value of `array`. If `array` is empty or falsey,
- * `undefined` is returned.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Math
- * @param {Array} array The array to iterate over.
- * @returns {*} Returns the maximum value.
- * @example
- *
- * _.max([4, 2, 8, 6]);
- * // => 8
- *
- * _.max([]);
- * // => undefined
- */
-function max(array) {
-  return (array && array.length)
-    ? baseExtremum(array, identity, baseGt)
-    : undefined;
-}
-
-module.exports = max;
-
-},{}],16:[function(require,module,exports){
-(function (global){
-/**
- * Lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright OpenJS Foundation and other contributors <https://openjsf.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** Used as the size to enable large array optimizations. */
-var LARGE_ARRAY_SIZE = 200;
-
-/** Used to stand-in for `undefined` hash values. */
-var HASH_UNDEFINED = '__lodash_hash_undefined__';
-
-/** Used to detect hot functions by number of calls within a span of milliseconds. */
-var HOT_COUNT = 800,
-    HOT_SPAN = 16;
-
-/** Used as references for various `Number` constants. */
-var MAX_SAFE_INTEGER = 9007199254740991;
-
-/** `Object#toString` result references. */
-var argsTag = '[object Arguments]',
-    arrayTag = '[object Array]',
-    asyncTag = '[object AsyncFunction]',
-    boolTag = '[object Boolean]',
-    dateTag = '[object Date]',
-    errorTag = '[object Error]',
-    funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]',
-    mapTag = '[object Map]',
-    numberTag = '[object Number]',
-    nullTag = '[object Null]',
-    objectTag = '[object Object]',
-    proxyTag = '[object Proxy]',
-    regexpTag = '[object RegExp]',
-    setTag = '[object Set]',
-    stringTag = '[object String]',
-    undefinedTag = '[object Undefined]',
-    weakMapTag = '[object WeakMap]';
-
-var arrayBufferTag = '[object ArrayBuffer]',
-    dataViewTag = '[object DataView]',
-    float32Tag = '[object Float32Array]',
-    float64Tag = '[object Float64Array]',
-    int8Tag = '[object Int8Array]',
-    int16Tag = '[object Int16Array]',
-    int32Tag = '[object Int32Array]',
-    uint8Tag = '[object Uint8Array]',
-    uint8ClampedTag = '[object Uint8ClampedArray]',
-    uint16Tag = '[object Uint16Array]',
-    uint32Tag = '[object Uint32Array]';
-
-/**
- * Used to match `RegExp`
- * [syntax characters](http://ecma-international.org/ecma-262/7.0/#sec-patterns).
- */
-var reRegExpChar = /[\\^$.*+?()[\]{}|]/g;
-
-/** Used to detect host constructors (Safari). */
-var reIsHostCtor = /^\[object .+?Constructor\]$/;
-
-/** Used to detect unsigned integer values. */
-var reIsUint = /^(?:0|[1-9]\d*)$/;
-
-/** Used to identify `toStringTag` values of typed arrays. */
-var typedArrayTags = {};
-typedArrayTags[float32Tag] = typedArrayTags[float64Tag] =
-typedArrayTags[int8Tag] = typedArrayTags[int16Tag] =
-typedArrayTags[int32Tag] = typedArrayTags[uint8Tag] =
-typedArrayTags[uint8ClampedTag] = typedArrayTags[uint16Tag] =
-typedArrayTags[uint32Tag] = true;
-typedArrayTags[argsTag] = typedArrayTags[arrayTag] =
-typedArrayTags[arrayBufferTag] = typedArrayTags[boolTag] =
-typedArrayTags[dataViewTag] = typedArrayTags[dateTag] =
-typedArrayTags[errorTag] = typedArrayTags[funcTag] =
-typedArrayTags[mapTag] = typedArrayTags[numberTag] =
-typedArrayTags[objectTag] = typedArrayTags[regexpTag] =
-typedArrayTags[setTag] = typedArrayTags[stringTag] =
-typedArrayTags[weakMapTag] = false;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/** Detect free variable `exports`. */
-var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
-
-/** Detect free variable `module`. */
-var freeModule = freeExports && typeof module == 'object' && module && !module.nodeType && module;
-
-/** Detect the popular CommonJS extension `module.exports`. */
-var moduleExports = freeModule && freeModule.exports === freeExports;
-
-/** Detect free variable `process` from Node.js. */
-var freeProcess = moduleExports && freeGlobal.process;
-
-/** Used to access faster Node.js helpers. */
-var nodeUtil = (function() {
-  try {
-    // Use `util.types` for Node.js 10+.
-    var types = freeModule && freeModule.require && freeModule.require('util').types;
-
-    if (types) {
-      return types;
-    }
-
-    // Legacy `process.binding('util')` for Node.js < 10.
-    return freeProcess && freeProcess.binding && freeProcess.binding('util');
-  } catch (e) {}
-}());
-
-/* Node.js helper references. */
-var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
-
-/**
- * A faster alternative to `Function#apply`, this function invokes `func`
- * with the `this` binding of `thisArg` and the arguments of `args`.
- *
- * @private
- * @param {Function} func The function to invoke.
- * @param {*} thisArg The `this` binding of `func`.
- * @param {Array} args The arguments to invoke `func` with.
- * @returns {*} Returns the result of `func`.
- */
-function apply(func, thisArg, args) {
-  switch (args.length) {
-    case 0: return func.call(thisArg);
-    case 1: return func.call(thisArg, args[0]);
-    case 2: return func.call(thisArg, args[0], args[1]);
-    case 3: return func.call(thisArg, args[0], args[1], args[2]);
-  }
-  return func.apply(thisArg, args);
-}
-
-/**
- * The base implementation of `_.times` without support for iteratee shorthands
- * or max array length checks.
- *
- * @private
- * @param {number} n The number of times to invoke `iteratee`.
- * @param {Function} iteratee The function invoked per iteration.
- * @returns {Array} Returns the array of results.
- */
-function baseTimes(n, iteratee) {
-  var index = -1,
-      result = Array(n);
-
-  while (++index < n) {
-    result[index] = iteratee(index);
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.unary` without support for storing metadata.
- *
- * @private
- * @param {Function} func The function to cap arguments for.
- * @returns {Function} Returns the new capped function.
- */
-function baseUnary(func) {
-  return function(value) {
-    return func(value);
-  };
-}
-
-/**
- * Gets the value at `key` of `object`.
- *
- * @private
- * @param {Object} [object] The object to query.
- * @param {string} key The key of the property to get.
- * @returns {*} Returns the property value.
- */
-function getValue(object, key) {
-  return object == null ? undefined : object[key];
-}
-
-/**
- * Creates a unary function that invokes `func` with its argument transformed.
- *
- * @private
- * @param {Function} func The function to wrap.
- * @param {Function} transform The argument transform.
- * @returns {Function} Returns the new function.
- */
-function overArg(func, transform) {
-  return function(arg) {
-    return func(transform(arg));
-  };
-}
-
-/** Used for built-in method references. */
-var arrayProto = Array.prototype,
-    funcProto = Function.prototype,
-    objectProto = Object.prototype;
-
-/** Used to detect overreaching core-js shims. */
-var coreJsData = root['__core-js_shared__'];
-
-/** Used to resolve the decompiled source of functions. */
-var funcToString = funcProto.toString;
-
-/** Used to check objects for own properties. */
-var hasOwnProperty = objectProto.hasOwnProperty;
-
-/** Used to detect methods masquerading as native. */
-var maskSrcKey = (function() {
-  var uid = /[^.]+$/.exec(coreJsData && coreJsData.keys && coreJsData.keys.IE_PROTO || '');
-  return uid ? ('Symbol(src)_1.' + uid) : '';
-}());
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var nativeObjectToString = objectProto.toString;
-
-/** Used to infer the `Object` constructor. */
-var objectCtorString = funcToString.call(Object);
-
-/** Used to detect if a method is native. */
-var reIsNative = RegExp('^' +
-  funcToString.call(hasOwnProperty).replace(reRegExpChar, '\\$&')
-  .replace(/hasOwnProperty|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'
-);
-
-/** Built-in value references. */
-var Buffer = moduleExports ? root.Buffer : undefined,
-    Symbol = root.Symbol,
-    Uint8Array = root.Uint8Array,
-    allocUnsafe = Buffer ? Buffer.allocUnsafe : undefined,
-    getPrototype = overArg(Object.getPrototypeOf, Object),
-    objectCreate = Object.create,
-    propertyIsEnumerable = objectProto.propertyIsEnumerable,
-    splice = arrayProto.splice,
-    symToStringTag = Symbol ? Symbol.toStringTag : undefined;
-
-var defineProperty = (function() {
-  try {
-    var func = getNative(Object, 'defineProperty');
-    func({}, '', {});
-    return func;
-  } catch (e) {}
-}());
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeIsBuffer = Buffer ? Buffer.isBuffer : undefined,
-    nativeMax = Math.max,
-    nativeNow = Date.now;
-
-/* Built-in method references that are verified to be native. */
-var Map = getNative(root, 'Map'),
-    nativeCreate = getNative(Object, 'create');
-
-/**
- * The base implementation of `_.create` without support for assigning
- * properties to the created object.
- *
- * @private
- * @param {Object} proto The object to inherit from.
- * @returns {Object} Returns the new object.
- */
-var baseCreate = (function() {
-  function object() {}
-  return function(proto) {
-    if (!isObject(proto)) {
-      return {};
-    }
-    if (objectCreate) {
-      return objectCreate(proto);
-    }
-    object.prototype = proto;
-    var result = new object;
-    object.prototype = undefined;
-    return result;
-  };
-}());
-
-/**
- * Creates a hash object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function Hash(entries) {
-  var index = -1,
-      length = entries == null ? 0 : entries.length;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the hash.
- *
- * @private
- * @name clear
- * @memberOf Hash
- */
-function hashClear() {
-  this.__data__ = nativeCreate ? nativeCreate(null) : {};
-  this.size = 0;
-}
-
-/**
- * Removes `key` and its value from the hash.
- *
- * @private
- * @name delete
- * @memberOf Hash
- * @param {Object} hash The hash to modify.
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function hashDelete(key) {
-  var result = this.has(key) && delete this.__data__[key];
-  this.size -= result ? 1 : 0;
-  return result;
-}
-
-/**
- * Gets the hash value for `key`.
- *
- * @private
- * @name get
- * @memberOf Hash
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function hashGet(key) {
-  var data = this.__data__;
-  if (nativeCreate) {
-    var result = data[key];
-    return result === HASH_UNDEFINED ? undefined : result;
-  }
-  return hasOwnProperty.call(data, key) ? data[key] : undefined;
-}
-
-/**
- * Checks if a hash value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Hash
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function hashHas(key) {
-  var data = this.__data__;
-  return nativeCreate ? (data[key] !== undefined) : hasOwnProperty.call(data, key);
-}
-
-/**
- * Sets the hash `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Hash
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the hash instance.
- */
-function hashSet(key, value) {
-  var data = this.__data__;
-  this.size += this.has(key) ? 0 : 1;
-  data[key] = (nativeCreate && value === undefined) ? HASH_UNDEFINED : value;
-  return this;
-}
-
-// Add methods to `Hash`.
-Hash.prototype.clear = hashClear;
-Hash.prototype['delete'] = hashDelete;
-Hash.prototype.get = hashGet;
-Hash.prototype.has = hashHas;
-Hash.prototype.set = hashSet;
-
-/**
- * Creates an list cache object.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function ListCache(entries) {
-  var index = -1,
-      length = entries == null ? 0 : entries.length;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the list cache.
- *
- * @private
- * @name clear
- * @memberOf ListCache
- */
-function listCacheClear() {
-  this.__data__ = [];
-  this.size = 0;
-}
-
-/**
- * Removes `key` and its value from the list cache.
- *
- * @private
- * @name delete
- * @memberOf ListCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function listCacheDelete(key) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  if (index < 0) {
-    return false;
-  }
-  var lastIndex = data.length - 1;
-  if (index == lastIndex) {
-    data.pop();
-  } else {
-    splice.call(data, index, 1);
-  }
-  --this.size;
-  return true;
-}
-
-/**
- * Gets the list cache value for `key`.
- *
- * @private
- * @name get
- * @memberOf ListCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function listCacheGet(key) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  return index < 0 ? undefined : data[index][1];
-}
-
-/**
- * Checks if a list cache value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf ListCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function listCacheHas(key) {
-  return assocIndexOf(this.__data__, key) > -1;
-}
-
-/**
- * Sets the list cache `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf ListCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the list cache instance.
- */
-function listCacheSet(key, value) {
-  var data = this.__data__,
-      index = assocIndexOf(data, key);
-
-  if (index < 0) {
-    ++this.size;
-    data.push([key, value]);
-  } else {
-    data[index][1] = value;
-  }
-  return this;
-}
-
-// Add methods to `ListCache`.
-ListCache.prototype.clear = listCacheClear;
-ListCache.prototype['delete'] = listCacheDelete;
-ListCache.prototype.get = listCacheGet;
-ListCache.prototype.has = listCacheHas;
-ListCache.prototype.set = listCacheSet;
-
-/**
- * Creates a map cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function MapCache(entries) {
-  var index = -1,
-      length = entries == null ? 0 : entries.length;
-
-  this.clear();
-  while (++index < length) {
-    var entry = entries[index];
-    this.set(entry[0], entry[1]);
-  }
-}
-
-/**
- * Removes all key-value entries from the map.
- *
- * @private
- * @name clear
- * @memberOf MapCache
- */
-function mapCacheClear() {
-  this.size = 0;
-  this.__data__ = {
-    'hash': new Hash,
-    'map': new (Map || ListCache),
-    'string': new Hash
-  };
-}
-
-/**
- * Removes `key` and its value from the map.
- *
- * @private
- * @name delete
- * @memberOf MapCache
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function mapCacheDelete(key) {
-  var result = getMapData(this, key)['delete'](key);
-  this.size -= result ? 1 : 0;
-  return result;
-}
-
-/**
- * Gets the map value for `key`.
- *
- * @private
- * @name get
- * @memberOf MapCache
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function mapCacheGet(key) {
-  return getMapData(this, key).get(key);
-}
-
-/**
- * Checks if a map value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf MapCache
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function mapCacheHas(key) {
-  return getMapData(this, key).has(key);
-}
-
-/**
- * Sets the map `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf MapCache
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the map cache instance.
- */
-function mapCacheSet(key, value) {
-  var data = getMapData(this, key),
-      size = data.size;
-
-  data.set(key, value);
-  this.size += data.size == size ? 0 : 1;
-  return this;
-}
-
-// Add methods to `MapCache`.
-MapCache.prototype.clear = mapCacheClear;
-MapCache.prototype['delete'] = mapCacheDelete;
-MapCache.prototype.get = mapCacheGet;
-MapCache.prototype.has = mapCacheHas;
-MapCache.prototype.set = mapCacheSet;
-
-/**
- * Creates a stack cache object to store key-value pairs.
- *
- * @private
- * @constructor
- * @param {Array} [entries] The key-value pairs to cache.
- */
-function Stack(entries) {
-  var data = this.__data__ = new ListCache(entries);
-  this.size = data.size;
-}
-
-/**
- * Removes all key-value entries from the stack.
- *
- * @private
- * @name clear
- * @memberOf Stack
- */
-function stackClear() {
-  this.__data__ = new ListCache;
-  this.size = 0;
-}
-
-/**
- * Removes `key` and its value from the stack.
- *
- * @private
- * @name delete
- * @memberOf Stack
- * @param {string} key The key of the value to remove.
- * @returns {boolean} Returns `true` if the entry was removed, else `false`.
- */
-function stackDelete(key) {
-  var data = this.__data__,
-      result = data['delete'](key);
-
-  this.size = data.size;
-  return result;
-}
-
-/**
- * Gets the stack value for `key`.
- *
- * @private
- * @name get
- * @memberOf Stack
- * @param {string} key The key of the value to get.
- * @returns {*} Returns the entry value.
- */
-function stackGet(key) {
-  return this.__data__.get(key);
-}
-
-/**
- * Checks if a stack value for `key` exists.
- *
- * @private
- * @name has
- * @memberOf Stack
- * @param {string} key The key of the entry to check.
- * @returns {boolean} Returns `true` if an entry for `key` exists, else `false`.
- */
-function stackHas(key) {
-  return this.__data__.has(key);
-}
-
-/**
- * Sets the stack `key` to `value`.
- *
- * @private
- * @name set
- * @memberOf Stack
- * @param {string} key The key of the value to set.
- * @param {*} value The value to set.
- * @returns {Object} Returns the stack cache instance.
- */
-function stackSet(key, value) {
-  var data = this.__data__;
-  if (data instanceof ListCache) {
-    var pairs = data.__data__;
-    if (!Map || (pairs.length < LARGE_ARRAY_SIZE - 1)) {
-      pairs.push([key, value]);
-      this.size = ++data.size;
-      return this;
-    }
-    data = this.__data__ = new MapCache(pairs);
-  }
-  data.set(key, value);
-  this.size = data.size;
-  return this;
-}
-
-// Add methods to `Stack`.
-Stack.prototype.clear = stackClear;
-Stack.prototype['delete'] = stackDelete;
-Stack.prototype.get = stackGet;
-Stack.prototype.has = stackHas;
-Stack.prototype.set = stackSet;
-
-/**
- * Creates an array of the enumerable property names of the array-like `value`.
- *
- * @private
- * @param {*} value The value to query.
- * @param {boolean} inherited Specify returning inherited property names.
- * @returns {Array} Returns the array of property names.
- */
-function arrayLikeKeys(value, inherited) {
-  var isArr = isArray(value),
-      isArg = !isArr && isArguments(value),
-      isBuff = !isArr && !isArg && isBuffer(value),
-      isType = !isArr && !isArg && !isBuff && isTypedArray(value),
-      skipIndexes = isArr || isArg || isBuff || isType,
-      result = skipIndexes ? baseTimes(value.length, String) : [],
-      length = result.length;
-
-  for (var key in value) {
-    if ((inherited || hasOwnProperty.call(value, key)) &&
-        !(skipIndexes && (
-           // Safari 9 has enumerable `arguments.length` in strict mode.
-           key == 'length' ||
-           // Node.js 0.10 has enumerable non-index properties on buffers.
-           (isBuff && (key == 'offset' || key == 'parent')) ||
-           // PhantomJS 2 has enumerable non-index properties on typed arrays.
-           (isType && (key == 'buffer' || key == 'byteLength' || key == 'byteOffset')) ||
-           // Skip index properties.
-           isIndex(key, length)
-        ))) {
-      result.push(key);
-    }
-  }
-  return result;
-}
-
-/**
- * This function is like `assignValue` except that it doesn't assign
- * `undefined` values.
- *
- * @private
- * @param {Object} object The object to modify.
- * @param {string} key The key of the property to assign.
- * @param {*} value The value to assign.
- */
-function assignMergeValue(object, key, value) {
-  if ((value !== undefined && !eq(object[key], value)) ||
-      (value === undefined && !(key in object))) {
-    baseAssignValue(object, key, value);
-  }
-}
-
-/**
- * Assigns `value` to `key` of `object` if the existing value is not equivalent
- * using [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
- * for equality comparisons.
- *
- * @private
- * @param {Object} object The object to modify.
- * @param {string} key The key of the property to assign.
- * @param {*} value The value to assign.
- */
-function assignValue(object, key, value) {
-  var objValue = object[key];
-  if (!(hasOwnProperty.call(object, key) && eq(objValue, value)) ||
-      (value === undefined && !(key in object))) {
-    baseAssignValue(object, key, value);
-  }
-}
-
-/**
- * Gets the index at which the `key` is found in `array` of key-value pairs.
- *
- * @private
- * @param {Array} array The array to inspect.
- * @param {*} key The key to search for.
- * @returns {number} Returns the index of the matched value, else `-1`.
- */
-function assocIndexOf(array, key) {
-  var length = array.length;
-  while (length--) {
-    if (eq(array[length][0], key)) {
-      return length;
-    }
-  }
-  return -1;
-}
-
-/**
- * The base implementation of `assignValue` and `assignMergeValue` without
- * value checks.
- *
- * @private
- * @param {Object} object The object to modify.
- * @param {string} key The key of the property to assign.
- * @param {*} value The value to assign.
- */
-function baseAssignValue(object, key, value) {
-  if (key == '__proto__' && defineProperty) {
-    defineProperty(object, key, {
-      'configurable': true,
-      'enumerable': true,
-      'value': value,
-      'writable': true
-    });
-  } else {
-    object[key] = value;
-  }
-}
-
-/**
- * The base implementation of `baseForOwn` which iterates over `object`
- * properties returned by `keysFunc` and invokes `iteratee` for each property.
- * Iteratee functions may exit iteration early by explicitly returning `false`.
- *
- * @private
- * @param {Object} object The object to iterate over.
- * @param {Function} iteratee The function invoked per iteration.
- * @param {Function} keysFunc The function to get the keys of `object`.
- * @returns {Object} Returns `object`.
- */
-var baseFor = createBaseFor();
-
-/**
- * The base implementation of `getTag` without fallbacks for buggy environments.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the `toStringTag`.
- */
-function baseGetTag(value) {
-  if (value == null) {
-    return value === undefined ? undefinedTag : nullTag;
-  }
-  return (symToStringTag && symToStringTag in Object(value))
-    ? getRawTag(value)
-    : objectToString(value);
-}
-
-/**
- * The base implementation of `_.isArguments`.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an `arguments` object,
- */
-function baseIsArguments(value) {
-  return isObjectLike(value) && baseGetTag(value) == argsTag;
-}
-
-/**
- * The base implementation of `_.isNative` without bad shim checks.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a native function,
- *  else `false`.
- */
-function baseIsNative(value) {
-  if (!isObject(value) || isMasked(value)) {
-    return false;
-  }
-  var pattern = isFunction(value) ? reIsNative : reIsHostCtor;
-  return pattern.test(toSource(value));
-}
-
-/**
- * The base implementation of `_.isTypedArray` without Node.js optimizations.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- */
-function baseIsTypedArray(value) {
-  return isObjectLike(value) &&
-    isLength(value.length) && !!typedArrayTags[baseGetTag(value)];
-}
-
-/**
- * The base implementation of `_.keysIn` which doesn't treat sparse arrays as dense.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- */
-function baseKeysIn(object) {
-  if (!isObject(object)) {
-    return nativeKeysIn(object);
-  }
-  var isProto = isPrototype(object),
-      result = [];
-
-  for (var key in object) {
-    if (!(key == 'constructor' && (isProto || !hasOwnProperty.call(object, key)))) {
-      result.push(key);
-    }
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.merge` without support for multiple sources.
- *
- * @private
- * @param {Object} object The destination object.
- * @param {Object} source The source object.
- * @param {number} srcIndex The index of `source`.
- * @param {Function} [customizer] The function to customize merged values.
- * @param {Object} [stack] Tracks traversed source values and their merged
- *  counterparts.
- */
-function baseMerge(object, source, srcIndex, customizer, stack) {
-  if (object === source) {
-    return;
-  }
-  baseFor(source, function(srcValue, key) {
-    stack || (stack = new Stack);
-    if (isObject(srcValue)) {
-      baseMergeDeep(object, source, key, srcIndex, baseMerge, customizer, stack);
-    }
-    else {
-      var newValue = customizer
-        ? customizer(safeGet(object, key), srcValue, (key + ''), object, source, stack)
-        : undefined;
-
-      if (newValue === undefined) {
-        newValue = srcValue;
-      }
-      assignMergeValue(object, key, newValue);
-    }
-  }, keysIn);
-}
-
-/**
- * A specialized version of `baseMerge` for arrays and objects which performs
- * deep merges and tracks traversed objects enabling objects with circular
- * references to be merged.
- *
- * @private
- * @param {Object} object The destination object.
- * @param {Object} source The source object.
- * @param {string} key The key of the value to merge.
- * @param {number} srcIndex The index of `source`.
- * @param {Function} mergeFunc The function to merge values.
- * @param {Function} [customizer] The function to customize assigned values.
- * @param {Object} [stack] Tracks traversed source values and their merged
- *  counterparts.
- */
-function baseMergeDeep(object, source, key, srcIndex, mergeFunc, customizer, stack) {
-  var objValue = safeGet(object, key),
-      srcValue = safeGet(source, key),
-      stacked = stack.get(srcValue);
-
-  if (stacked) {
-    assignMergeValue(object, key, stacked);
-    return;
-  }
-  var newValue = customizer
-    ? customizer(objValue, srcValue, (key + ''), object, source, stack)
-    : undefined;
-
-  var isCommon = newValue === undefined;
-
-  if (isCommon) {
-    var isArr = isArray(srcValue),
-        isBuff = !isArr && isBuffer(srcValue),
-        isTyped = !isArr && !isBuff && isTypedArray(srcValue);
-
-    newValue = srcValue;
-    if (isArr || isBuff || isTyped) {
-      if (isArray(objValue)) {
-        newValue = objValue;
-      }
-      else if (isArrayLikeObject(objValue)) {
-        newValue = copyArray(objValue);
-      }
-      else if (isBuff) {
-        isCommon = false;
-        newValue = cloneBuffer(srcValue, true);
-      }
-      else if (isTyped) {
-        isCommon = false;
-        newValue = cloneTypedArray(srcValue, true);
-      }
-      else {
-        newValue = [];
-      }
-    }
-    else if (isPlainObject(srcValue) || isArguments(srcValue)) {
-      newValue = objValue;
-      if (isArguments(objValue)) {
-        newValue = toPlainObject(objValue);
-      }
-      else if (!isObject(objValue) || isFunction(objValue)) {
-        newValue = initCloneObject(srcValue);
-      }
-    }
-    else {
-      isCommon = false;
-    }
-  }
-  if (isCommon) {
-    // Recursively merge objects and arrays (susceptible to call stack limits).
-    stack.set(srcValue, newValue);
-    mergeFunc(newValue, srcValue, srcIndex, customizer, stack);
-    stack['delete'](srcValue);
-  }
-  assignMergeValue(object, key, newValue);
-}
-
-/**
- * The base implementation of `_.rest` which doesn't validate or coerce arguments.
- *
- * @private
- * @param {Function} func The function to apply a rest parameter to.
- * @param {number} [start=func.length-1] The start position of the rest parameter.
- * @returns {Function} Returns the new function.
- */
-function baseRest(func, start) {
-  return setToString(overRest(func, start, identity), func + '');
-}
-
-/**
- * The base implementation of `setToString` without support for hot loop shorting.
- *
- * @private
- * @param {Function} func The function to modify.
- * @param {Function} string The `toString` result.
- * @returns {Function} Returns `func`.
- */
-var baseSetToString = !defineProperty ? identity : function(func, string) {
-  return defineProperty(func, 'toString', {
-    'configurable': true,
-    'enumerable': false,
-    'value': constant(string),
-    'writable': true
-  });
-};
-
-/**
- * Creates a clone of  `buffer`.
- *
- * @private
- * @param {Buffer} buffer The buffer to clone.
- * @param {boolean} [isDeep] Specify a deep clone.
- * @returns {Buffer} Returns the cloned buffer.
- */
-function cloneBuffer(buffer, isDeep) {
-  if (isDeep) {
-    return buffer.slice();
-  }
-  var length = buffer.length,
-      result = allocUnsafe ? allocUnsafe(length) : new buffer.constructor(length);
-
-  buffer.copy(result);
-  return result;
-}
-
-/**
- * Creates a clone of `arrayBuffer`.
- *
- * @private
- * @param {ArrayBuffer} arrayBuffer The array buffer to clone.
- * @returns {ArrayBuffer} Returns the cloned array buffer.
- */
-function cloneArrayBuffer(arrayBuffer) {
-  var result = new arrayBuffer.constructor(arrayBuffer.byteLength);
-  new Uint8Array(result).set(new Uint8Array(arrayBuffer));
-  return result;
-}
-
-/**
- * Creates a clone of `typedArray`.
- *
- * @private
- * @param {Object} typedArray The typed array to clone.
- * @param {boolean} [isDeep] Specify a deep clone.
- * @returns {Object} Returns the cloned typed array.
- */
-function cloneTypedArray(typedArray, isDeep) {
-  var buffer = isDeep ? cloneArrayBuffer(typedArray.buffer) : typedArray.buffer;
-  return new typedArray.constructor(buffer, typedArray.byteOffset, typedArray.length);
-}
-
-/**
- * Copies the values of `source` to `array`.
- *
- * @private
- * @param {Array} source The array to copy values from.
- * @param {Array} [array=[]] The array to copy values to.
- * @returns {Array} Returns `array`.
- */
-function copyArray(source, array) {
-  var index = -1,
-      length = source.length;
-
-  array || (array = Array(length));
-  while (++index < length) {
-    array[index] = source[index];
-  }
-  return array;
-}
-
-/**
- * Copies properties of `source` to `object`.
- *
- * @private
- * @param {Object} source The object to copy properties from.
- * @param {Array} props The property identifiers to copy.
- * @param {Object} [object={}] The object to copy properties to.
- * @param {Function} [customizer] The function to customize copied values.
- * @returns {Object} Returns `object`.
- */
-function copyObject(source, props, object, customizer) {
-  var isNew = !object;
-  object || (object = {});
-
-  var index = -1,
-      length = props.length;
-
-  while (++index < length) {
-    var key = props[index];
-
-    var newValue = customizer
-      ? customizer(object[key], source[key], key, object, source)
-      : undefined;
-
-    if (newValue === undefined) {
-      newValue = source[key];
-    }
-    if (isNew) {
-      baseAssignValue(object, key, newValue);
-    } else {
-      assignValue(object, key, newValue);
-    }
-  }
-  return object;
-}
-
-/**
- * Creates a function like `_.assign`.
- *
- * @private
- * @param {Function} assigner The function to assign values.
- * @returns {Function} Returns the new assigner function.
- */
-function createAssigner(assigner) {
-  return baseRest(function(object, sources) {
-    var index = -1,
-        length = sources.length,
-        customizer = length > 1 ? sources[length - 1] : undefined,
-        guard = length > 2 ? sources[2] : undefined;
-
-    customizer = (assigner.length > 3 && typeof customizer == 'function')
-      ? (length--, customizer)
-      : undefined;
-
-    if (guard && isIterateeCall(sources[0], sources[1], guard)) {
-      customizer = length < 3 ? undefined : customizer;
-      length = 1;
-    }
-    object = Object(object);
-    while (++index < length) {
-      var source = sources[index];
-      if (source) {
-        assigner(object, source, index, customizer);
-      }
-    }
-    return object;
-  });
-}
-
-/**
- * Creates a base function for methods like `_.forIn` and `_.forOwn`.
- *
- * @private
- * @param {boolean} [fromRight] Specify iterating from right to left.
- * @returns {Function} Returns the new base function.
- */
-function createBaseFor(fromRight) {
-  return function(object, iteratee, keysFunc) {
-    var index = -1,
-        iterable = Object(object),
-        props = keysFunc(object),
-        length = props.length;
-
-    while (length--) {
-      var key = props[fromRight ? length : ++index];
-      if (iteratee(iterable[key], key, iterable) === false) {
-        break;
-      }
-    }
-    return object;
-  };
-}
-
-/**
- * Gets the data for `map`.
- *
- * @private
- * @param {Object} map The map to query.
- * @param {string} key The reference key.
- * @returns {*} Returns the map data.
- */
-function getMapData(map, key) {
-  var data = map.__data__;
-  return isKeyable(key)
-    ? data[typeof key == 'string' ? 'string' : 'hash']
-    : data.map;
-}
-
-/**
- * Gets the native function at `key` of `object`.
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the method to get.
- * @returns {*} Returns the function if it's native, else `undefined`.
- */
-function getNative(object, key) {
-  var value = getValue(object, key);
-  return baseIsNative(value) ? value : undefined;
-}
-
-/**
- * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
- *
- * @private
- * @param {*} value The value to query.
- * @returns {string} Returns the raw `toStringTag`.
- */
-function getRawTag(value) {
-  var isOwn = hasOwnProperty.call(value, symToStringTag),
-      tag = value[symToStringTag];
-
-  try {
-    value[symToStringTag] = undefined;
-    var unmasked = true;
-  } catch (e) {}
-
-  var result = nativeObjectToString.call(value);
-  if (unmasked) {
-    if (isOwn) {
-      value[symToStringTag] = tag;
-    } else {
-      delete value[symToStringTag];
-    }
-  }
-  return result;
-}
-
-/**
- * Initializes an object clone.
- *
- * @private
- * @param {Object} object The object to clone.
- * @returns {Object} Returns the initialized clone.
- */
-function initCloneObject(object) {
-  return (typeof object.constructor == 'function' && !isPrototype(object))
-    ? baseCreate(getPrototype(object))
-    : {};
-}
-
-/**
- * Checks if `value` is a valid array-like index.
- *
- * @private
- * @param {*} value The value to check.
- * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
- * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
- */
-function isIndex(value, length) {
-  var type = typeof value;
-  length = length == null ? MAX_SAFE_INTEGER : length;
-
-  return !!length &&
-    (type == 'number' ||
-      (type != 'symbol' && reIsUint.test(value))) &&
-        (value > -1 && value % 1 == 0 && value < length);
-}
-
-/**
- * Checks if the given arguments are from an iteratee call.
- *
- * @private
- * @param {*} value The potential iteratee value argument.
- * @param {*} index The potential iteratee index or key argument.
- * @param {*} object The potential iteratee object argument.
- * @returns {boolean} Returns `true` if the arguments are from an iteratee call,
- *  else `false`.
- */
-function isIterateeCall(value, index, object) {
-  if (!isObject(object)) {
-    return false;
-  }
-  var type = typeof index;
-  if (type == 'number'
-        ? (isArrayLike(object) && isIndex(index, object.length))
-        : (type == 'string' && index in object)
-      ) {
-    return eq(object[index], value);
-  }
-  return false;
-}
-
-/**
- * Checks if `value` is suitable for use as unique object key.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is suitable, else `false`.
- */
-function isKeyable(value) {
-  var type = typeof value;
-  return (type == 'string' || type == 'number' || type == 'symbol' || type == 'boolean')
-    ? (value !== '__proto__')
-    : (value === null);
-}
-
-/**
- * Checks if `func` has its source masked.
- *
- * @private
- * @param {Function} func The function to check.
- * @returns {boolean} Returns `true` if `func` is masked, else `false`.
- */
-function isMasked(func) {
-  return !!maskSrcKey && (maskSrcKey in func);
-}
-
-/**
- * Checks if `value` is likely a prototype object.
- *
- * @private
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a prototype, else `false`.
- */
-function isPrototype(value) {
-  var Ctor = value && value.constructor,
-      proto = (typeof Ctor == 'function' && Ctor.prototype) || objectProto;
-
-  return value === proto;
-}
-
-/**
- * This function is like
- * [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
- * except that it includes inherited enumerable properties.
- *
- * @private
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- */
-function nativeKeysIn(object) {
-  var result = [];
-  if (object != null) {
-    for (var key in Object(object)) {
-      result.push(key);
-    }
-  }
-  return result;
-}
-
-/**
- * Converts `value` to a string using `Object.prototype.toString`.
- *
- * @private
- * @param {*} value The value to convert.
- * @returns {string} Returns the converted string.
- */
-function objectToString(value) {
-  return nativeObjectToString.call(value);
-}
-
-/**
- * A specialized version of `baseRest` which transforms the rest array.
- *
- * @private
- * @param {Function} func The function to apply a rest parameter to.
- * @param {number} [start=func.length-1] The start position of the rest parameter.
- * @param {Function} transform The rest array transform.
- * @returns {Function} Returns the new function.
- */
-function overRest(func, start, transform) {
-  start = nativeMax(start === undefined ? (func.length - 1) : start, 0);
-  return function() {
-    var args = arguments,
-        index = -1,
-        length = nativeMax(args.length - start, 0),
-        array = Array(length);
-
-    while (++index < length) {
-      array[index] = args[start + index];
-    }
-    index = -1;
-    var otherArgs = Array(start + 1);
-    while (++index < start) {
-      otherArgs[index] = args[index];
-    }
-    otherArgs[start] = transform(array);
-    return apply(func, this, otherArgs);
-  };
-}
-
-/**
- * Gets the value at `key`, unless `key` is "__proto__" or "constructor".
- *
- * @private
- * @param {Object} object The object to query.
- * @param {string} key The key of the property to get.
- * @returns {*} Returns the property value.
- */
-function safeGet(object, key) {
-  if (key === 'constructor' && typeof object[key] === 'function') {
-    return;
-  }
-
-  if (key == '__proto__') {
-    return;
-  }
-
-  return object[key];
-}
-
-/**
- * Sets the `toString` method of `func` to return `string`.
- *
- * @private
- * @param {Function} func The function to modify.
- * @param {Function} string The `toString` result.
- * @returns {Function} Returns `func`.
- */
-var setToString = shortOut(baseSetToString);
-
-/**
- * Creates a function that'll short out and invoke `identity` instead
- * of `func` when it's called `HOT_COUNT` or more times in `HOT_SPAN`
- * milliseconds.
- *
- * @private
- * @param {Function} func The function to restrict.
- * @returns {Function} Returns the new shortable function.
- */
-function shortOut(func) {
-  var count = 0,
-      lastCalled = 0;
-
-  return function() {
-    var stamp = nativeNow(),
-        remaining = HOT_SPAN - (stamp - lastCalled);
-
-    lastCalled = stamp;
-    if (remaining > 0) {
-      if (++count >= HOT_COUNT) {
-        return arguments[0];
-      }
-    } else {
-      count = 0;
-    }
-    return func.apply(undefined, arguments);
-  };
-}
-
-/**
- * Converts `func` to its source code.
- *
- * @private
- * @param {Function} func The function to convert.
- * @returns {string} Returns the source code.
- */
-function toSource(func) {
-  if (func != null) {
-    try {
-      return funcToString.call(func);
-    } catch (e) {}
-    try {
-      return (func + '');
-    } catch (e) {}
-  }
-  return '';
-}
-
-/**
- * Performs a
- * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
- * comparison between two values to determine if they are equivalent.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'a': 1 };
- * var other = { 'a': 1 };
- *
- * _.eq(object, object);
- * // => true
- *
- * _.eq(object, other);
- * // => false
- *
- * _.eq('a', 'a');
- * // => true
- *
- * _.eq('a', Object('a'));
- * // => false
- *
- * _.eq(NaN, NaN);
- * // => true
- */
-function eq(value, other) {
-  return value === other || (value !== value && other !== other);
-}
-
-/**
- * Checks if `value` is likely an `arguments` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an `arguments` object,
- *  else `false`.
- * @example
- *
- * _.isArguments(function() { return arguments; }());
- * // => true
- *
- * _.isArguments([1, 2, 3]);
- * // => false
- */
-var isArguments = baseIsArguments(function() { return arguments; }()) ? baseIsArguments : function(value) {
-  return isObjectLike(value) && hasOwnProperty.call(value, 'callee') &&
-    !propertyIsEnumerable.call(value, 'callee');
-};
-
-/**
- * Checks if `value` is classified as an `Array` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array, else `false`.
- * @example
- *
- * _.isArray([1, 2, 3]);
- * // => true
- *
- * _.isArray(document.body.children);
- * // => false
- *
- * _.isArray('abc');
- * // => false
- *
- * _.isArray(_.noop);
- * // => false
- */
-var isArray = Array.isArray;
-
-/**
- * Checks if `value` is array-like. A value is considered array-like if it's
- * not a function and has a `value.length` that's an integer greater than or
- * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
- * @example
- *
- * _.isArrayLike([1, 2, 3]);
- * // => true
- *
- * _.isArrayLike(document.body.children);
- * // => true
- *
- * _.isArrayLike('abc');
- * // => true
- *
- * _.isArrayLike(_.noop);
- * // => false
- */
-function isArrayLike(value) {
-  return value != null && isLength(value.length) && !isFunction(value);
-}
-
-/**
- * This method is like `_.isArrayLike` except that it also checks if `value`
- * is an object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an array-like object,
- *  else `false`.
- * @example
- *
- * _.isArrayLikeObject([1, 2, 3]);
- * // => true
- *
- * _.isArrayLikeObject(document.body.children);
- * // => true
- *
- * _.isArrayLikeObject('abc');
- * // => false
- *
- * _.isArrayLikeObject(_.noop);
- * // => false
- */
-function isArrayLikeObject(value) {
-  return isObjectLike(value) && isArrayLike(value);
-}
-
-/**
- * Checks if `value` is a buffer.
- *
- * @static
- * @memberOf _
- * @since 4.3.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a buffer, else `false`.
- * @example
- *
- * _.isBuffer(new Buffer(2));
- * // => true
- *
- * _.isBuffer(new Uint8Array(2));
- * // => false
- */
-var isBuffer = nativeIsBuffer || stubFalse;
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a function, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  if (!isObject(value)) {
-    return false;
-  }
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 9 which returns 'object' for typed arrays and other constructors.
-  var tag = baseGetTag(value);
-  return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
-}
-
-/**
- * Checks if `value` is a valid array-like length.
- *
- * **Note:** This method is loosely based on
- * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
- * @example
- *
- * _.isLength(3);
- * // => true
- *
- * _.isLength(Number.MIN_VALUE);
- * // => false
- *
- * _.isLength(Infinity);
- * // => false
- *
- * _.isLength('3');
- * // => false
- */
-function isLength(value) {
-  return typeof value == 'number' &&
-    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return value != null && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return value != null && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is a plain object, that is, an object created by the
- * `Object` constructor or one with a `[[Prototype]]` of `null`.
- *
- * @static
- * @memberOf _
- * @since 0.8.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a plain object, else `false`.
- * @example
- *
- * function Foo() {
- *   this.a = 1;
- * }
- *
- * _.isPlainObject(new Foo);
- * // => false
- *
- * _.isPlainObject([1, 2, 3]);
- * // => false
- *
- * _.isPlainObject({ 'x': 0, 'y': 0 });
- * // => true
- *
- * _.isPlainObject(Object.create(null));
- * // => true
- */
-function isPlainObject(value) {
-  if (!isObjectLike(value) || baseGetTag(value) != objectTag) {
-    return false;
-  }
-  var proto = getPrototype(value);
-  if (proto === null) {
-    return true;
-  }
-  var Ctor = hasOwnProperty.call(proto, 'constructor') && proto.constructor;
-  return typeof Ctor == 'function' && Ctor instanceof Ctor &&
-    funcToString.call(Ctor) == objectCtorString;
-}
-
-/**
- * Checks if `value` is classified as a typed array.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a typed array, else `false`.
- * @example
- *
- * _.isTypedArray(new Uint8Array);
- * // => true
- *
- * _.isTypedArray([]);
- * // => false
- */
-var isTypedArray = nodeIsTypedArray ? baseUnary(nodeIsTypedArray) : baseIsTypedArray;
-
-/**
- * Converts `value` to a plain object flattening inherited enumerable string
- * keyed properties of `value` to own properties of the plain object.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {Object} Returns the converted plain object.
- * @example
- *
- * function Foo() {
- *   this.b = 2;
- * }
- *
- * Foo.prototype.c = 3;
- *
- * _.assign({ 'a': 1 }, new Foo);
- * // => { 'a': 1, 'b': 2 }
- *
- * _.assign({ 'a': 1 }, _.toPlainObject(new Foo));
- * // => { 'a': 1, 'b': 2, 'c': 3 }
- */
-function toPlainObject(value) {
-  return copyObject(value, keysIn(value));
-}
-
-/**
- * Creates an array of the own and inherited enumerable property names of `object`.
- *
- * **Note:** Non-object values are coerced to objects.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category Object
- * @param {Object} object The object to query.
- * @returns {Array} Returns the array of property names.
- * @example
- *
- * function Foo() {
- *   this.a = 1;
- *   this.b = 2;
- * }
- *
- * Foo.prototype.c = 3;
- *
- * _.keysIn(new Foo);
- * // => ['a', 'b', 'c'] (iteration order is not guaranteed)
- */
-function keysIn(object) {
-  return isArrayLike(object) ? arrayLikeKeys(object, true) : baseKeysIn(object);
-}
-
-/**
- * This method is like `_.assign` except that it recursively merges own and
- * inherited enumerable string keyed properties of source objects into the
- * destination object. Source properties that resolve to `undefined` are
- * skipped if a destination value exists. Array and plain object properties
- * are merged recursively. Other objects and value types are overridden by
- * assignment. Source objects are applied from left to right. Subsequent
- * sources overwrite property assignments of previous sources.
- *
- * **Note:** This method mutates `object`.
- *
- * @static
- * @memberOf _
- * @since 0.5.0
- * @category Object
- * @param {Object} object The destination object.
- * @param {...Object} [sources] The source objects.
- * @returns {Object} Returns `object`.
- * @example
- *
- * var object = {
- *   'a': [{ 'b': 2 }, { 'd': 4 }]
- * };
- *
- * var other = {
- *   'a': [{ 'c': 3 }, { 'e': 5 }]
- * };
- *
- * _.merge(object, other);
- * // => { 'a': [{ 'b': 2, 'c': 3 }, { 'd': 4, 'e': 5 }] }
- */
-var merge = createAssigner(function(object, source, srcIndex) {
-  baseMerge(object, source, srcIndex);
-});
-
-/**
- * Creates a function that returns `value`.
- *
- * @static
- * @memberOf _
- * @since 2.4.0
- * @category Util
- * @param {*} value The value to return from the new function.
- * @returns {Function} Returns the new constant function.
- * @example
- *
- * var objects = _.times(2, _.constant({ 'a': 1 }));
- *
- * console.log(objects);
- * // => [{ 'a': 1 }, { 'a': 1 }]
- *
- * console.log(objects[0] === objects[1]);
- * // => true
- */
-function constant(value) {
-  return function() {
-    return value;
-  };
-}
-
-/**
- * This method returns the first argument it receives.
- *
- * @static
- * @since 0.1.0
- * @memberOf _
- * @category Util
- * @param {*} value Any value.
- * @returns {*} Returns `value`.
- * @example
- *
- * var object = { 'a': 1 };
- *
- * console.log(_.identity(object) === object);
- * // => true
- */
-function identity(value) {
-  return value;
-}
-
-/**
- * This method returns `false`.
- *
- * @static
- * @memberOf _
- * @since 4.13.0
- * @category Util
- * @returns {boolean} Returns `false`.
- * @example
- *
- * _.times(2, _.stubFalse);
- * // => [false, false]
- */
-function stubFalse() {
-  return false;
-}
-
-module.exports = merge;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],17:[function(require,module,exports){
-(function (global){
-/**
- * lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright jQuery Foundation and other contributors <https://jquery.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** Used as references for various `Number` constants. */
-var INFINITY = 1 / 0,
-    MAX_SAFE_INTEGER = 9007199254740991,
-    MAX_INTEGER = 1.7976931348623157e+308,
-    NAN = 0 / 0;
-
-/** `Object#toString` result references. */
-var symbolTag = '[object Symbol]';
-
-/** Used to match leading and trailing whitespace. */
-var reTrim = /^\s+|\s+$/g;
-
-/** Used to detect bad signed hexadecimal string values. */
-var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
-
-/** Used to detect binary string values. */
-var reIsBinary = /^0b[01]+$/i;
-
-/** Used to detect octal string values. */
-var reIsOctal = /^0o[0-7]+$/i;
-
-/** Used to compose unicode character classes. */
-var rsAstralRange = '\\ud800-\\udfff',
-    rsComboMarksRange = '\\u0300-\\u036f\\ufe20-\\ufe23',
-    rsComboSymbolsRange = '\\u20d0-\\u20f0',
-    rsVarRange = '\\ufe0e\\ufe0f';
-
-/** Used to compose unicode capture groups. */
-var rsAstral = '[' + rsAstralRange + ']',
-    rsCombo = '[' + rsComboMarksRange + rsComboSymbolsRange + ']',
-    rsFitz = '\\ud83c[\\udffb-\\udfff]',
-    rsModifier = '(?:' + rsCombo + '|' + rsFitz + ')',
-    rsNonAstral = '[^' + rsAstralRange + ']',
-    rsRegional = '(?:\\ud83c[\\udde6-\\uddff]){2}',
-    rsSurrPair = '[\\ud800-\\udbff][\\udc00-\\udfff]',
-    rsZWJ = '\\u200d';
-
-/** Used to compose unicode regexes. */
-var reOptMod = rsModifier + '?',
-    rsOptVar = '[' + rsVarRange + ']?',
-    rsOptJoin = '(?:' + rsZWJ + '(?:' + [rsNonAstral, rsRegional, rsSurrPair].join('|') + ')' + rsOptVar + reOptMod + ')*',
-    rsSeq = rsOptVar + reOptMod + rsOptJoin,
-    rsSymbol = '(?:' + [rsNonAstral + rsCombo + '?', rsCombo, rsRegional, rsSurrPair, rsAstral].join('|') + ')';
-
-/** Used to match [string symbols](https://mathiasbynens.be/notes/javascript-unicode). */
-var reUnicode = RegExp(rsFitz + '(?=' + rsFitz + ')|' + rsSymbol + rsSeq, 'g');
-
-/** Used to detect strings with [zero-width joiners or code points from the astral planes](http://eev.ee/blog/2015/09/12/dark-corners-of-unicode/). */
-var reHasUnicode = RegExp('[' + rsZWJ + rsAstralRange  + rsComboMarksRange + rsComboSymbolsRange + rsVarRange + ']');
-
-/** Built-in method references without a dependency on `root`. */
-var freeParseInt = parseInt;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/**
- * Gets the size of an ASCII `string`.
- *
- * @private
- * @param {string} string The string inspect.
- * @returns {number} Returns the string size.
- */
-var asciiSize = baseProperty('length');
-
-/**
- * Converts an ASCII `string` to an array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the converted array.
- */
-function asciiToArray(string) {
-  return string.split('');
-}
-
-/**
- * The base implementation of `_.property` without support for deep paths.
- *
- * @private
- * @param {string} key The key of the property to get.
- * @returns {Function} Returns the new accessor function.
- */
-function baseProperty(key) {
-  return function(object) {
-    return object == null ? undefined : object[key];
-  };
-}
-
-/**
- * Checks if `string` contains Unicode symbols.
- *
- * @private
- * @param {string} string The string to inspect.
- * @returns {boolean} Returns `true` if a symbol is found, else `false`.
- */
-function hasUnicode(string) {
-  return reHasUnicode.test(string);
-}
-
-/**
- * Gets the number of symbols in `string`.
- *
- * @private
- * @param {string} string The string to inspect.
- * @returns {number} Returns the string size.
- */
-function stringSize(string) {
-  return hasUnicode(string)
-    ? unicodeSize(string)
-    : asciiSize(string);
-}
-
-/**
- * Converts `string` to an array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the converted array.
- */
-function stringToArray(string) {
-  return hasUnicode(string)
-    ? unicodeToArray(string)
-    : asciiToArray(string);
-}
-
-/**
- * Gets the size of a Unicode `string`.
- *
- * @private
- * @param {string} string The string inspect.
- * @returns {number} Returns the string size.
- */
-function unicodeSize(string) {
-  var result = reUnicode.lastIndex = 0;
-  while (reUnicode.test(string)) {
-    result++;
-  }
-  return result;
-}
-
-/**
- * Converts a Unicode `string` to an array.
- *
- * @private
- * @param {string} string The string to convert.
- * @returns {Array} Returns the converted array.
- */
-function unicodeToArray(string) {
-  return string.match(reUnicode) || [];
-}
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Built-in value references. */
-var Symbol = root.Symbol;
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeCeil = Math.ceil,
-    nativeFloor = Math.floor;
-
-/** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
-    symbolToString = symbolProto ? symbolProto.toString : undefined;
-
-/**
- * The base implementation of `_.repeat` which doesn't coerce arguments.
- *
- * @private
- * @param {string} string The string to repeat.
- * @param {number} n The number of times to repeat the string.
- * @returns {string} Returns the repeated string.
- */
-function baseRepeat(string, n) {
-  var result = '';
-  if (!string || n < 1 || n > MAX_SAFE_INTEGER) {
-    return result;
-  }
-  // Leverage the exponentiation by squaring algorithm for a faster repeat.
-  // See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for more details.
-  do {
-    if (n % 2) {
-      result += string;
-    }
-    n = nativeFloor(n / 2);
-    if (n) {
-      string += string;
-    }
-  } while (n);
-
-  return result;
-}
-
-/**
- * The base implementation of `_.slice` without an iteratee call guard.
- *
- * @private
- * @param {Array} array The array to slice.
- * @param {number} [start=0] The start position.
- * @param {number} [end=array.length] The end position.
- * @returns {Array} Returns the slice of `array`.
- */
-function baseSlice(array, start, end) {
-  var index = -1,
-      length = array.length;
-
-  if (start < 0) {
-    start = -start > length ? 0 : (length + start);
-  }
-  end = end > length ? length : end;
-  if (end < 0) {
-    end += length;
-  }
-  length = start > end ? 0 : ((end - start) >>> 0);
-  start >>>= 0;
-
-  var result = Array(length);
-  while (++index < length) {
-    result[index] = array[index + start];
-  }
-  return result;
-}
-
-/**
- * The base implementation of `_.toString` which doesn't convert nullish
- * values to empty strings.
- *
- * @private
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- */
-function baseToString(value) {
-  // Exit early for strings to avoid a performance hit in some environments.
-  if (typeof value == 'string') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return symbolToString ? symbolToString.call(value) : '';
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-/**
- * Casts `array` to a slice if it's needed.
- *
- * @private
- * @param {Array} array The array to inspect.
- * @param {number} start The start position.
- * @param {number} [end=array.length] The end position.
- * @returns {Array} Returns the cast slice.
- */
-function castSlice(array, start, end) {
-  var length = array.length;
-  end = end === undefined ? length : end;
-  return (!start && end >= length) ? array : baseSlice(array, start, end);
-}
-
-/**
- * Creates the padding for `string` based on `length`. The `chars` string
- * is truncated if the number of characters exceeds `length`.
- *
- * @private
- * @param {number} length The padding length.
- * @param {string} [chars=' '] The string used as padding.
- * @returns {string} Returns the padding for `string`.
- */
-function createPadding(length, chars) {
-  chars = chars === undefined ? ' ' : baseToString(chars);
-
-  var charsLength = chars.length;
-  if (charsLength < 2) {
-    return charsLength ? baseRepeat(chars, length) : chars;
-  }
-  var result = baseRepeat(chars, nativeCeil(length / stringSize(chars)));
-  return hasUnicode(chars)
-    ? castSlice(stringToArray(result), 0, length).join('')
-    : result.slice(0, length);
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && objectToString.call(value) == symbolTag);
-}
-
-/**
- * Converts `value` to a finite number.
- *
- * @static
- * @memberOf _
- * @since 4.12.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted number.
- * @example
- *
- * _.toFinite(3.2);
- * // => 3.2
- *
- * _.toFinite(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toFinite(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toFinite('3.2');
- * // => 3.2
- */
-function toFinite(value) {
-  if (!value) {
-    return value === 0 ? value : 0;
-  }
-  value = toNumber(value);
-  if (value === INFINITY || value === -INFINITY) {
-    var sign = (value < 0 ? -1 : 1);
-    return sign * MAX_INTEGER;
-  }
-  return value === value ? value : 0;
-}
-
-/**
- * Converts `value` to an integer.
- *
- * **Note:** This method is loosely based on
- * [`ToInteger`](http://www.ecma-international.org/ecma-262/7.0/#sec-tointeger).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted integer.
- * @example
- *
- * _.toInteger(3.2);
- * // => 3
- *
- * _.toInteger(Number.MIN_VALUE);
- * // => 0
- *
- * _.toInteger(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toInteger('3.2');
- * // => 3
- */
-function toInteger(value) {
-  var result = toFinite(value),
-      remainder = result % 1;
-
-  return result === result ? (remainder ? result - remainder : result) : 0;
-}
-
-/**
- * Converts `value` to a number.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {number} Returns the number.
- * @example
- *
- * _.toNumber(3.2);
- * // => 3.2
- *
- * _.toNumber(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toNumber(Infinity);
- * // => Infinity
- *
- * _.toNumber('3.2');
- * // => 3.2
- */
-function toNumber(value) {
-  if (typeof value == 'number') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return NAN;
-  }
-  if (isObject(value)) {
-    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
-    value = isObject(other) ? (other + '') : other;
-  }
-  if (typeof value != 'string') {
-    return value === 0 ? value : +value;
-  }
-  value = value.replace(reTrim, '');
-  var isBinary = reIsBinary.test(value);
-  return (isBinary || reIsOctal.test(value))
-    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
-    : (reIsBadHex.test(value) ? NAN : +value);
-}
-
-/**
- * Converts `value` to a string. An empty string is returned for `null`
- * and `undefined` values. The sign of `-0` is preserved.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- * @example
- *
- * _.toString(null);
- * // => ''
- *
- * _.toString(-0);
- * // => '-0'
- *
- * _.toString([1, 2, 3]);
- * // => '1,2,3'
- */
-function toString(value) {
-  return value == null ? '' : baseToString(value);
-}
-
-/**
- * Pads `string` on the left side if it's shorter than `length`. Padding
- * characters are truncated if they exceed `length`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category String
- * @param {string} [string=''] The string to pad.
- * @param {number} [length=0] The padding length.
- * @param {string} [chars=' '] The string used as padding.
- * @returns {string} Returns the padded string.
- * @example
- *
- * _.padStart('abc', 6);
- * // => '   abc'
- *
- * _.padStart('abc', 6, '_-');
- * // => '_-_abc'
- *
- * _.padStart('abc', 3);
- * // => 'abc'
- */
-function padStart(string, length, chars) {
-  string = toString(string);
-  length = toInteger(length);
-
-  var strLength = length ? stringSize(string) : 0;
-  return (length && strLength < length)
-    ? (createPadding(length - strLength, chars) + string)
-    : string;
-}
-
-module.exports = padStart;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],18:[function(require,module,exports){
-(function (global){
-/**
- * lodash (Custom Build) <https://lodash.com/>
- * Build: `lodash modularize exports="npm" -o ./`
- * Copyright jQuery Foundation and other contributors <https://jquery.org/>
- * Released under MIT license <https://lodash.com/license>
- * Based on Underscore.js 1.8.3 <http://underscorejs.org/LICENSE>
- * Copyright Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
- */
-
-/** Used as references for various `Number` constants. */
-var INFINITY = 1 / 0,
-    MAX_SAFE_INTEGER = 9007199254740991,
-    MAX_INTEGER = 1.7976931348623157e+308,
-    NAN = 0 / 0;
-
-/** `Object#toString` result references. */
-var funcTag = '[object Function]',
-    genTag = '[object GeneratorFunction]',
-    symbolTag = '[object Symbol]';
-
-/** Used to match leading and trailing whitespace. */
-var reTrim = /^\s+|\s+$/g;
-
-/** Used to detect bad signed hexadecimal string values. */
-var reIsBadHex = /^[-+]0x[0-9a-f]+$/i;
-
-/** Used to detect binary string values. */
-var reIsBinary = /^0b[01]+$/i;
-
-/** Used to detect octal string values. */
-var reIsOctal = /^0o[0-7]+$/i;
-
-/** Used to detect unsigned integer values. */
-var reIsUint = /^(?:0|[1-9]\d*)$/;
-
-/** Built-in method references without a dependency on `root`. */
-var freeParseInt = parseInt;
-
-/** Detect free variable `global` from Node.js. */
-var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-
-/** Detect free variable `self`. */
-var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-
-/** Used as a reference to the global object. */
-var root = freeGlobal || freeSelf || Function('return this')();
-
-/** Used for built-in method references. */
-var objectProto = Object.prototype;
-
-/**
- * Used to resolve the
- * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
- * of values.
- */
-var objectToString = objectProto.toString;
-
-/** Built-in value references. */
-var Symbol = root.Symbol;
-
-/* Built-in method references for those with the same name as other `lodash` methods. */
-var nativeFloor = Math.floor;
-
-/** Used to convert symbols to primitives and strings. */
-var symbolProto = Symbol ? Symbol.prototype : undefined,
-    symbolToString = symbolProto ? symbolProto.toString : undefined;
-
-/**
- * The base implementation of `_.repeat` which doesn't coerce arguments.
- *
- * @private
- * @param {string} string The string to repeat.
- * @param {number} n The number of times to repeat the string.
- * @returns {string} Returns the repeated string.
- */
-function baseRepeat(string, n) {
-  var result = '';
-  if (!string || n < 1 || n > MAX_SAFE_INTEGER) {
-    return result;
-  }
-  // Leverage the exponentiation by squaring algorithm for a faster repeat.
-  // See https://en.wikipedia.org/wiki/Exponentiation_by_squaring for more details.
-  do {
-    if (n % 2) {
-      result += string;
-    }
-    n = nativeFloor(n / 2);
-    if (n) {
-      string += string;
-    }
-  } while (n);
-
-  return result;
-}
-
-/**
- * The base implementation of `_.toString` which doesn't convert nullish
- * values to empty strings.
- *
- * @private
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- */
-function baseToString(value) {
-  // Exit early for strings to avoid a performance hit in some environments.
-  if (typeof value == 'string') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return symbolToString ? symbolToString.call(value) : '';
-  }
-  var result = (value + '');
-  return (result == '0' && (1 / value) == -INFINITY) ? '-0' : result;
-}
-
-/**
- * Checks if `value` is a valid array-like index.
- *
- * @private
- * @param {*} value The value to check.
- * @param {number} [length=MAX_SAFE_INTEGER] The upper bounds of a valid index.
- * @returns {boolean} Returns `true` if `value` is a valid index, else `false`.
- */
-function isIndex(value, length) {
-  length = length == null ? MAX_SAFE_INTEGER : length;
-  return !!length &&
-    (typeof value == 'number' || reIsUint.test(value)) &&
-    (value > -1 && value % 1 == 0 && value < length);
-}
-
-/**
- * Checks if the given arguments are from an iteratee call.
- *
- * @private
- * @param {*} value The potential iteratee value argument.
- * @param {*} index The potential iteratee index or key argument.
- * @param {*} object The potential iteratee object argument.
- * @returns {boolean} Returns `true` if the arguments are from an iteratee call,
- *  else `false`.
- */
-function isIterateeCall(value, index, object) {
-  if (!isObject(object)) {
-    return false;
-  }
-  var type = typeof index;
-  if (type == 'number'
-        ? (isArrayLike(object) && isIndex(index, object.length))
-        : (type == 'string' && index in object)
-      ) {
-    return eq(object[index], value);
-  }
-  return false;
-}
-
-/**
- * Performs a
- * [`SameValueZero`](http://ecma-international.org/ecma-262/7.0/#sec-samevaluezero)
- * comparison between two values to determine if they are equivalent.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to compare.
- * @param {*} other The other value to compare.
- * @returns {boolean} Returns `true` if the values are equivalent, else `false`.
- * @example
- *
- * var object = { 'a': 1 };
- * var other = { 'a': 1 };
- *
- * _.eq(object, object);
- * // => true
- *
- * _.eq(object, other);
- * // => false
- *
- * _.eq('a', 'a');
- * // => true
- *
- * _.eq('a', Object('a'));
- * // => false
- *
- * _.eq(NaN, NaN);
- * // => true
- */
-function eq(value, other) {
-  return value === other || (value !== value && other !== other);
-}
-
-/**
- * Checks if `value` is array-like. A value is considered array-like if it's
- * not a function and has a `value.length` that's an integer greater than or
- * equal to `0` and less than or equal to `Number.MAX_SAFE_INTEGER`.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is array-like, else `false`.
- * @example
- *
- * _.isArrayLike([1, 2, 3]);
- * // => true
- *
- * _.isArrayLike(document.body.children);
- * // => true
- *
- * _.isArrayLike('abc');
- * // => true
- *
- * _.isArrayLike(_.noop);
- * // => false
- */
-function isArrayLike(value) {
-  return value != null && isLength(value.length) && !isFunction(value);
-}
-
-/**
- * Checks if `value` is classified as a `Function` object.
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a function, else `false`.
- * @example
- *
- * _.isFunction(_);
- * // => true
- *
- * _.isFunction(/abc/);
- * // => false
- */
-function isFunction(value) {
-  // The use of `Object#toString` avoids issues with the `typeof` operator
-  // in Safari 8-9 which returns 'object' for typed array and other constructors.
-  var tag = isObject(value) ? objectToString.call(value) : '';
-  return tag == funcTag || tag == genTag;
-}
-
-/**
- * Checks if `value` is a valid array-like length.
- *
- * **Note:** This method is loosely based on
- * [`ToLength`](http://ecma-international.org/ecma-262/7.0/#sec-tolength).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a valid length, else `false`.
- * @example
- *
- * _.isLength(3);
- * // => true
- *
- * _.isLength(Number.MIN_VALUE);
- * // => false
- *
- * _.isLength(Infinity);
- * // => false
- *
- * _.isLength('3');
- * // => false
- */
-function isLength(value) {
-  return typeof value == 'number' &&
-    value > -1 && value % 1 == 0 && value <= MAX_SAFE_INTEGER;
-}
-
-/**
- * Checks if `value` is the
- * [language type](http://www.ecma-international.org/ecma-262/7.0/#sec-ecmascript-language-types)
- * of `Object`. (e.g. arrays, functions, objects, regexes, `new Number(0)`, and `new String('')`)
- *
- * @static
- * @memberOf _
- * @since 0.1.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is an object, else `false`.
- * @example
- *
- * _.isObject({});
- * // => true
- *
- * _.isObject([1, 2, 3]);
- * // => true
- *
- * _.isObject(_.noop);
- * // => true
- *
- * _.isObject(null);
- * // => false
- */
-function isObject(value) {
-  var type = typeof value;
-  return !!value && (type == 'object' || type == 'function');
-}
-
-/**
- * Checks if `value` is object-like. A value is object-like if it's not `null`
- * and has a `typeof` result of "object".
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is object-like, else `false`.
- * @example
- *
- * _.isObjectLike({});
- * // => true
- *
- * _.isObjectLike([1, 2, 3]);
- * // => true
- *
- * _.isObjectLike(_.noop);
- * // => false
- *
- * _.isObjectLike(null);
- * // => false
- */
-function isObjectLike(value) {
-  return !!value && typeof value == 'object';
-}
-
-/**
- * Checks if `value` is classified as a `Symbol` primitive or object.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to check.
- * @returns {boolean} Returns `true` if `value` is a symbol, else `false`.
- * @example
- *
- * _.isSymbol(Symbol.iterator);
- * // => true
- *
- * _.isSymbol('abc');
- * // => false
- */
-function isSymbol(value) {
-  return typeof value == 'symbol' ||
-    (isObjectLike(value) && objectToString.call(value) == symbolTag);
-}
-
-/**
- * Converts `value` to a finite number.
- *
- * @static
- * @memberOf _
- * @since 4.12.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted number.
- * @example
- *
- * _.toFinite(3.2);
- * // => 3.2
- *
- * _.toFinite(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toFinite(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toFinite('3.2');
- * // => 3.2
- */
-function toFinite(value) {
-  if (!value) {
-    return value === 0 ? value : 0;
-  }
-  value = toNumber(value);
-  if (value === INFINITY || value === -INFINITY) {
-    var sign = (value < 0 ? -1 : 1);
-    return sign * MAX_INTEGER;
-  }
-  return value === value ? value : 0;
-}
-
-/**
- * Converts `value` to an integer.
- *
- * **Note:** This method is loosely based on
- * [`ToInteger`](http://www.ecma-international.org/ecma-262/7.0/#sec-tointeger).
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to convert.
- * @returns {number} Returns the converted integer.
- * @example
- *
- * _.toInteger(3.2);
- * // => 3
- *
- * _.toInteger(Number.MIN_VALUE);
- * // => 0
- *
- * _.toInteger(Infinity);
- * // => 1.7976931348623157e+308
- *
- * _.toInteger('3.2');
- * // => 3
- */
-function toInteger(value) {
-  var result = toFinite(value),
-      remainder = result % 1;
-
-  return result === result ? (remainder ? result - remainder : result) : 0;
-}
-
-/**
- * Converts `value` to a number.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {number} Returns the number.
- * @example
- *
- * _.toNumber(3.2);
- * // => 3.2
- *
- * _.toNumber(Number.MIN_VALUE);
- * // => 5e-324
- *
- * _.toNumber(Infinity);
- * // => Infinity
- *
- * _.toNumber('3.2');
- * // => 3.2
- */
-function toNumber(value) {
-  if (typeof value == 'number') {
-    return value;
-  }
-  if (isSymbol(value)) {
-    return NAN;
-  }
-  if (isObject(value)) {
-    var other = typeof value.valueOf == 'function' ? value.valueOf() : value;
-    value = isObject(other) ? (other + '') : other;
-  }
-  if (typeof value != 'string') {
-    return value === 0 ? value : +value;
-  }
-  value = value.replace(reTrim, '');
-  var isBinary = reIsBinary.test(value);
-  return (isBinary || reIsOctal.test(value))
-    ? freeParseInt(value.slice(2), isBinary ? 2 : 8)
-    : (reIsBadHex.test(value) ? NAN : +value);
-}
-
-/**
- * Converts `value` to a string. An empty string is returned for `null`
- * and `undefined` values. The sign of `-0` is preserved.
- *
- * @static
- * @memberOf _
- * @since 4.0.0
- * @category Lang
- * @param {*} value The value to process.
- * @returns {string} Returns the string.
- * @example
- *
- * _.toString(null);
- * // => ''
- *
- * _.toString(-0);
- * // => '-0'
- *
- * _.toString([1, 2, 3]);
- * // => '1,2,3'
- */
-function toString(value) {
-  return value == null ? '' : baseToString(value);
-}
-
-/**
- * Repeats the given string `n` times.
- *
- * @static
- * @memberOf _
- * @since 3.0.0
- * @category String
- * @param {string} [string=''] The string to repeat.
- * @param {number} [n=1] The number of times to repeat the string.
- * @param- {Object} [guard] Enables use as an iteratee for methods like `_.map`.
- * @returns {string} Returns the repeated string.
- * @example
- *
- * _.repeat('*', 3);
- * // => '***'
- *
- * _.repeat('abc', 2);
- * // => 'abcabc'
- *
- * _.repeat('abc', 0);
- * // => ''
- */
-function repeat(string, n, guard) {
-  if ((guard ? isIterateeCall(string, n, guard) : n === undefined)) {
-    n = 1;
-  } else {
-    n = toInteger(n);
-  }
-  return baseRepeat(toString(string), n);
-}
-
-module.exports = repeat;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],19:[function(require,module,exports){
+},{}],13:[function(require,module,exports){
 /* global window, exports, define */
 
 !function() {

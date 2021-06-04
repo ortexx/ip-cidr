@@ -25,49 +25,45 @@ const validRange = [
 describe('IPCIDR:', function () {
   describe('check validity:', function () {
     it('should be valid', function () {
-      const cidr = new IPCIDR(validCIDR);
-      assert.isTrue(cidr.isValid());
+      assert.doesNotThrow(() => new IPCIDR(validCIDR));
     });
 
     it('should be valid v6', function () {
-      const cidr = new IPCIDR('2001:db8::/120');
-      assert.isTrue(cidr.isValid(), 'check the status');      
+      const cidr = new IPCIDR('2001:db8::/120');     
       assert.equal(cidr.addressStart.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:0000', 'check the start');      
       assert.equal(cidr.addressEnd.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:00ff', 'check the end');      
     });
 
     it('should be valid mapped cidr', function () {
-      const cidr = new IPCIDR('::FFFF:' + validCIDRMapped);
-      assert.isTrue(cidr.isValid(), 'check the status');      
+      const cidr = new IPCIDR('::FFFF:' + validCIDRMapped);   
       assert.equal(cidr.addressStart.addressMinusSuffix, validCIDRStart, 'check the start');      
       assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');     
 
     });
 
     it('should be invalid', function () {
-      const cidr = new IPCIDR('192.168.1.1');
-      assert.isFalse(cidr.isValid());
+      assert.throw(() => new IPCIDR('192.168.1.1'));
     });
   });
 
   describe(".formatIP()", function () {
     it('check as string', function () {
       const cidr = new IPCIDR(validCIDR);
-      assert.equal(cidr.formatIP(cidr.address), validCIDRClear);
+      assert.equal(IPCIDR.formatIP(cidr.address), validCIDRClear);
     });
 
     it('check as big integer', function () {
       const cidr = new IPCIDR(validCIDR);
-      assert.equal(JSON.stringify(cidr.formatIP(cidr.address, { type: 'bigInteger' })), JSON.stringify(cidr.formatIP(cidr.address, { type: "bigInteger" })));
+      assert.equal(JSON.stringify(IPCIDR.formatIP(cidr.address, { type: 'bigInteger' })), JSON.stringify(IPCIDR.formatIP(cidr.address, { type: "bigInteger" })));
     });
 
     it('check as object', function () {
       const cidr = new IPCIDR(validCIDR);
-      assert.strictEqual(cidr.address, cidr.formatIP(cidr.address, { type: "addressObject" }));
+      assert.strictEqual(cidr.address, IPCIDR.formatIP(cidr.address, { type: "addressObject" }));
     });
   });
 
-  describe(".contains()", function () {
+  describe(".prototype.contains()", function () {
     describe("check as string", function () {
       it('should be true', function () {
         const cidr = new IPCIDR(validCIDR);
@@ -78,6 +74,16 @@ describe('IPCIDR:', function () {
         const cidr = new IPCIDR(validCIDR);
         assert.isFalse(cidr.contains('5.5.5.16'));      
       });
+
+      it('should be false with a random string', function () {
+        const cidr = new IPCIDR(validCIDR);
+        assert.isFalse(cidr.contains('hello'));
+      });
+
+      it('should be false with octal notation', function () {
+        const cidr = new IPCIDR('10.0.0.1/8');
+        assert.isFalse(cidr.contains('010.1.1.1'));
+      });      
     });
 
     describe("check as big integer", function () {
@@ -106,29 +112,29 @@ describe('IPCIDR:', function () {
   });
 
   describe("check methods", function () {
-    it('.start()', function () {
+    it('.prototype.start()', function () {
       const cidr = new IPCIDR(validCIDR);
       assert.equal(cidr.start(), validCIDRStart);
     });
 
-    it('.end()', function () {
+    it('.prototype.end()', function () {
       const cidr = new IPCIDR(validCIDR);
       assert.equal(cidr.end(), validCIDREnd);
     });
 
-    it('.toString()', function () {
+    it('.prototype.toString()', function () {
       const cidr = new IPCIDR(validCIDR);
       assert.equal(cidr.toString(), validCIDR);
     });
 
-    it('.toRange()', function () {
+    it('.prototype.toRange()', function () {
       const cidr = new IPCIDR(validCIDR);
       const range = cidr.toRange();
       assert.equal(range[0], validCIDRStart);
       assert.equal(range[1], validCIDREnd);
     });
 
-    it('.toObject()', function () {
+    it('.prototype.toObject()', function () {
       const cidr = new IPCIDR(validCIDR);
       const obj = cidr.toObject();
       assert.equal(obj.start, validCIDRStart);
@@ -136,7 +142,7 @@ describe('IPCIDR:', function () {
     });
   });
 
-  describe(".toArray()", function () {
+  describe(".prototype.toArray()", function () {
     it('should return the full array', function () {
       const cidr = new IPCIDR(validCIDR);
       const array = cidr.toArray();
@@ -202,7 +208,7 @@ describe('IPCIDR:', function () {
     });
   });
 
-  describe(".loop()", function () {
+  describe(".prototype.loop()", function () {
     it('should read the full range', function () {
       const cidr = new IPCIDR(validCIDR);
       let counter = 0;
