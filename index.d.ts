@@ -40,6 +40,8 @@ declare namespace IPCIDR {
     limit: BigInteger;
     length: BigInteger;
   }
+  
+  function isValidAddress(address: string): boolean;
 }
 
 export = IPCIDR;
