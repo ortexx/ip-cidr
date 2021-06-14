@@ -41,7 +41,9 @@ declare namespace IPCIDR {
     length: BigInteger;
   }
   
-  function isValidAddress(address: string): boolean;
+  export function formatIP<T = FormatResult>(address: Address, options?: any): T;
+  export function isValidAddress(address: string): boolean;
+  export function createAddress(address: string): Address;
 }
 
 export = IPCIDR;
