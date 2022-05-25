@@ -14,10 +14,11 @@ class IPCIDR {
     this.cidr = address.address;
     this.ipAddressType = address.constructor;
     this.address = address;
-    this.addressStart = address.startAddress();    
-    this.addressEnd = address.endAddress();
+    this.addressStart = address.startAddress();
+    this.addressEnd = address.endAddress();    
     this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
     this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
+    this.size = new BigInteger(this.addressEnd.bigInteger().subtract(this.addressStart.bigInteger()).add(new BigInteger('1')).toString());
   }
   
   contains(address) {

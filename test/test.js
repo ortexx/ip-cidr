@@ -31,13 +31,14 @@ describe('IPCIDR:', function () {
     it('should be valid v6', function () {
       const cidr = new IPCIDR('2001:db8::/120');     
       assert.equal(cidr.addressStart.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:0000', 'check the start');      
-      assert.equal(cidr.addressEnd.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:00ff', 'check the end');      
+      assert.equal(cidr.addressEnd.addressMinusSuffix, '2001:0db8:0000:0000:0000:0000:0000:00ff', 'check the end'); 
+      assert.equal(cidr.toArray().length, cidr.size.toString(), 'check the size');     
     });
 
     it('should be valid mapped cidr', function () {
       const cidr = new IPCIDR('::FFFF:' + validCIDRMapped);   
       assert.equal(cidr.addressStart.addressMinusSuffix, validCIDRStart, 'check the start');      
-      assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');     
+      assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');           
 
     });
 
@@ -48,7 +49,7 @@ describe('IPCIDR:', function () {
 
   describe(".formatIP()", function () {
     it('check as string', function () {
-      const cidr = new IPCIDR(validCIDR);
+      const cidr = new IPCIDR(validCIDR); 
       assert.equal(IPCIDR.formatIP(cidr.address), validCIDRClear);
     });
 
