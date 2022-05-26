@@ -1,7 +1,15 @@
 import { Address4, Address6 } from "ip-address";
 import { BigInteger } from "jsbn";
 
+type Address = Address4 | Address6;
+
 declare class IPCIDR {
+  cidr: string;
+  address: Address;
+  addressStart: Address;
+  addressEnd: Address;
+  size: BigInteger;
+
   constructor(cidr: string);
 
   start<T = IPCIDR.FormatResult>(options?: IPCIDR.FormatOptions): T;
