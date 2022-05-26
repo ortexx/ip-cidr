@@ -38,8 +38,7 @@ describe('IPCIDR:', function () {
     it('should be valid mapped cidr', function () {
       const cidr = new IPCIDR('::FFFF:' + validCIDRMapped);   
       assert.equal(cidr.addressStart.addressMinusSuffix, validCIDRStart, 'check the start');      
-      assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');           
-
+      assert.equal(cidr.addressEnd.addressMinusSuffix, validCIDREnd, 'check the end');      
     });
 
     it('should be invalid', function () {
