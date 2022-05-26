@@ -5,7 +5,7 @@ type Address = Address4 | Address6;
 
 declare class IPCIDR {
   cidr: string;
-  address: Address;
+  address: string;
   addressStart: Address;
   addressEnd: Address;
   size: BigInteger;
