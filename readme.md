@@ -11,7 +11,7 @@ const IPCIDR = require("ip-cidr");
 const BigInteger = require("jsbn").BigInteger;
 const address = "50.165.190.0/23";
 
-if(!IPCIDR.isValidAddress(address)) {
+if(!IPCIDR.isValidCIDR(address)) {
   return;
 }
 
@@ -48,7 +48,10 @@ Load __/dist/ip-cidr.js__ as a script and you can get the library in __window.IP
 to return an "ip-address" module object in the necessary format 
 
 ### .isValidAddress(address)  
-to check the address is valid or not
+to check the address is valid or not (ip or cidr)
+
+### .isValidCIDR(address)  
+to check the address is valid (only cidr)
 
 ### .createAddress(address)  
 to create an object address from the string

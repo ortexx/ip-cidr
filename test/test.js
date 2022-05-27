@@ -63,6 +63,34 @@ describe('IPCIDR:', function () {
     });
   });
 
+  describe(".isValidAddress()", function () {
+    it('check a wrong address', function () {; 
+      assert.isFalse(IPCIDR.isValidAddress('wrong'));
+    });
+
+    it('check an ip address', function () {; 
+      assert.isTrue(IPCIDR.isValidAddress('1.1.1.1'));
+    });
+
+    it('check CIDR', function () {; 
+      assert.isTrue(IPCIDR.isValidAddress('1.1.1.1/24'));
+    });
+  });
+
+  describe(".isValidCIDR()", function () {
+    it('check a wrong address', function () {; 
+      assert.isFalse(IPCIDR.isValidCIDR('wrong'));
+    });
+
+    it('check an ip address', function () {; 
+      assert.isFalse(IPCIDR.isValidCIDR('1.1.1.1'));
+    });
+
+    it('check CIDR', function () {; 
+      assert.isTrue(IPCIDR.isValidCIDR('1.1.1.1/24'));
+    });
+  });
+
   describe(".prototype.contains()", function () {
     describe("check as string", function () {
       it('should be true', function () {

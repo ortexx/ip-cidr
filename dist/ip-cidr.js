@@ -202,6 +202,19 @@ IPCIDR.isValidAddress = function (address) {
   }
 }
 
+IPCIDR.isValidCIDR = function (address) {
+  if(typeof address !== 'string' || !address.match('/')) {
+    return false;
+  }
+
+  try {
+    return !!this.createAddress(address);
+  }
+  catch(err) {
+    return false;
+  }
+}
+
 module.exports = IPCIDR;
 
 },{"ip-address":3,"jsbn":12}],2:[function(require,module,exports){
