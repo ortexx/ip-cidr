@@ -26,9 +26,9 @@ declare class IPCIDR {
 
   toString(): string;
 
-  toArray(options?: IPCIDR.FormatOptions, results?: IPCIDR.ChunkInfo): string[]
+  toArray(options?: IPCIDR.FormatOptions, results?: IPCIDR.ChunkInfo): string[];
 
-  toObject(options?: IPCIDR.FormatOptions): { start: string, end: string }
+  toObject(options?: IPCIDR.FormatOptions): { start: string, end: string };
 }
 
 declare namespace IPCIDR {
