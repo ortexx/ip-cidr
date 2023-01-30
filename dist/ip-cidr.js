@@ -177,9 +177,14 @@ IPCIDR.createAddress = function (val) {
 
   val.match(/:.\./) && (val = val.split(':').pop());
   const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
+  let ip = new ipAddressType(val);
 
-  if(ipAddressType === ipAddress.Address4) {
-    const parts = val.split('.');
+  if(ip.v4 && val.match(":") && ip.address4) {
+    ip = ip.address4;
+  }
+
+  if(ip.v4) {
+    const parts = ip.addressMinusSuffix.split('.');
 
     for(let i = 0; i < parts.length; i++) {
       const part = parts[i].split('/')[0];
@@ -190,7 +195,7 @@ IPCIDR.createAddress = function (val) {
     }
   }
 
-  return new ipAddressType(val);
+  return ip
 }
 
 IPCIDR.isValidAddress = function (address) {

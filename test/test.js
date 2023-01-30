@@ -98,6 +98,11 @@ describe('IPCIDR:', function () {
         assert.isTrue(cidr.contains('5.5.5.15'));      
       });
 
+      it('should be true for mapped ip address', function () {
+        const cidr = new IPCIDR(validCIDR);       
+        assert.isTrue(cidr.contains('::ffff:5.5.5.15'));
+      });
+
       it('should be false', function () {
         const cidr = new IPCIDR(validCIDR);
         assert.isFalse(cidr.contains('5.5.5.16'));      
