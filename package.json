@@ -34,7 +34,7 @@
     "@types/jsbn": "^1.2.29",
     "browserify": "^14.5.0",
     "chai": "^3.5.0",
-    "husky": "^4.2.3",
+    "husky": "^8.0.3",
     "mocha": "^9.2.0"
   },
   "repository": {
