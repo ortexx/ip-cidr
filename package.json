@@ -1,8 +1,9 @@
 {
   "name": "ip-cidr",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "description": "Module for working with CIDR (v4, v6)",
   "main": "./index.js",
+  "type": "module",
   "types": "./index.d.ts",
   "author": {
     "name": "Alexander Balasyan",
@@ -19,7 +20,7 @@
   "license": "MIT",
   "scripts": {
     "test": "mocha",
-    "build": "browserify ./ip-cidr.js > ./dist/ip-cidr.js"
+    "build": "browserify ./ip-cidr.js -p esmify > ./dist/ip-cidr.js"
   },
   "husky": {
     "hooks": {
@@ -27,21 +28,20 @@
     }
   },
   "dependencies": {
-    "ip-address": "^7.1.0",
-    "jsbn": "^1.1.0"
+    "ip-address": "^9.0.5"
   },
   "devDependencies": {
-    "@types/jsbn": "^1.2.29",
-    "browserify": "^14.5.0",
-    "chai": "^3.5.0",
+    "browserify": "^17.0.0",
+    "chai": "^4.3.0",
+    "esmify": "^2.1.1",
     "husky": "^4.2.3",
-    "mocha": "^9.2.0"
+    "mocha": "^10.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/ortexx/ip-cidr"
   },
   "engines": {
-    "node": ">=10.0.0"
+    "node": ">=16.14.0"
   }
 }

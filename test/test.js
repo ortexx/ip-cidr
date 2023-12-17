@@ -1,9 +1,8 @@
 "use strict";
 
-const assert = require('chai').assert;
-const IPCIDR = require('../index');
-const BigInteger = require('jsbn').BigInteger;
-const ipAddress = require('ip-address');
+import { assert } from 'chai';
+import IPCIDR from '../index.js';
+import ipAddress from 'ip-address';
 
 const validCIDR = '5.5.5.8/29';
 const validCIDRMapped = '5.5.5.8/29';
@@ -47,17 +46,17 @@ describe('IPCIDR:', function () {
   });
 
   describe(".formatIP()", function () {
-    it('check as string', function () {
+    it('check as a string', function () {
       const cidr = new IPCIDR(validCIDR); 
       assert.equal(IPCIDR.formatIP(cidr.address), validCIDRClear);
     });
 
-    it('check as big integer', function () {
+    it('check as a big integer', function () {
       const cidr = new IPCIDR(validCIDR);
-      assert.equal(JSON.stringify(IPCIDR.formatIP(cidr.address, { type: 'bigInteger' })), JSON.stringify(IPCIDR.formatIP(cidr.address, { type: "bigInteger" })));
+      assert.isTrue(typeof IPCIDR.formatIP(cidr.address, { type: 'bigInteger' }) ==  'bigint')
     });
 
-    it('check as object', function () {
+    it('check as an object', function () {
       const cidr = new IPCIDR(validCIDR);
       assert.strictEqual(cidr.address, IPCIDR.formatIP(cidr.address, { type: "addressObject" }));
     });
@@ -92,7 +91,7 @@ describe('IPCIDR:', function () {
   });
 
   describe(".prototype.contains()", function () {
-    describe("check as string", function () {
+    describe("check as a string", function () {
       it('should be true', function () {
         const cidr = new IPCIDR(validCIDR);
         assert.isTrue(cidr.contains('5.5.5.15'));      
@@ -119,19 +118,19 @@ describe('IPCIDR:', function () {
       });      
     });
 
-    describe("check as big integer", function () {
+    describe("check as a big integer", function () {
       it('should be true', function () {
         const cidr = new IPCIDR(validCIDR);
-        assert.isTrue(cidr.contains(new BigInteger('84215055')));      
+        assert.isTrue(cidr.contains(BigInt('84215055')));      
       });
 
       it('should be false', function () {
         const cidr = new IPCIDR(validCIDR);
-        assert.isFalse(cidr.contains(new BigInteger('84215056')));      
+        assert.isFalse(cidr.contains(BigInt('84215056')));      
       });
     });
 
-    describe("check as object", function () {
+    describe("check as an object", function () {
       it('should be true', function () {
         const cidr = new IPCIDR(validCIDR);
         assert.isTrue(cidr.contains(new ipAddress.Address4('5.5.5.15')));      
@@ -199,18 +198,18 @@ describe('IPCIDR:', function () {
       const results = {};
       const options = { from: 3, limit: 10 };
       const array = cidr.toArray(options, results);      
-      assert.equal(results.from.intValue(), options.from);
-      assert.equal(results.to.intValue(), results.length.intValue());
+      assert.equal(results.from, options.from);
+      assert.equal(results.to, results.length);
       assert.lengthOf(array, validRange.length - options.from);
     });
     
     it('should return a part of the range with from/limit with numbers', function () {
       const cidr = new IPCIDR(validCIDR);
       const results = {};
-      const options = { from: new BigInteger('3'), limit: new BigInteger('2') };
+      const options = { from: BigInt('3'), limit: BigInt('2') };
       const array = cidr.toArray(options, results);      
-      assert.equal(results.from.intValue(), +options.from.toString());
-      assert.equal(results.limit.intValue(), +options.limit.toString());
+      assert.equal(results.from, +options.from.toString());
+      assert.equal(results.limit, +options.limit.toString());
       assert.lengthOf(array, +options.limit.toString());
     });
     
@@ -219,8 +218,8 @@ describe('IPCIDR:', function () {
       const results = {};
       const options = { from: 3, to: 5 };
       const array = cidr.toArray(options, results);
-      assert.equal(results.from.intValue(), options.from);
-      assert.equal(results.to.intValue(), options.to);
+      assert.equal(results.from, options.from);
+      assert.equal(results.to, options.to);
       assert.equal(array[0], validRange[options.from]);
       assert.equal(array[1], validRange[options.to - 1]);
       assert.lengthOf(array, 2);
@@ -233,8 +232,8 @@ describe('IPCIDR:', function () {
       const to = 5;
       const options = { from: validRange[from], to: validRange[to] };
       const array = cidr.toArray(options, results);
-      assert.equal(results.from.intValue(), from);
-      assert.equal(results.to.intValue(), to);
+      assert.equal(results.from, from);
+      assert.equal(results.to, to);
       assert.equal(array[0], validRange[from]);
       assert.equal(array[1], validRange[to - 1]);
       assert.lengthOf(array, 2);
@@ -264,9 +263,9 @@ describe('IPCIDR:', function () {
         assert.equal(validRange[counter], ip);
         counter++;
       }, options, results).then(function () {
-        assert.equal(results.from.intValue(), options.from);
-        assert.equal(results.limit.intValue(), options.limit);
-        assert.equal(results.to.intValue(), options.from + options.limit);
+        assert.equal(results.from, options.from);
+        assert.equal(results.limit, options.limit);
+        assert.equal(results.to, options.from + options.limit);
         assert.equal(counter, options.from + options.limit);
       })
     });

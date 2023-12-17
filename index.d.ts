@@ -1,5 +1,4 @@
 import { Address4, Address6 } from "ip-address";
-import { BigInteger } from "jsbn";
 
 type Address = Address4 | Address6;
 
@@ -8,7 +7,7 @@ declare class IPCIDR {
   address: Address;
   addressStart: Address;
   addressEnd: Address;
-  size: BigInteger;
+  size: BigInt;
 
   constructor(cidr: string);
 
@@ -22,7 +21,7 @@ declare class IPCIDR {
 
   getChunkInfo(length: number, options: IPCIDR.FormatOptions): IPCIDR.ChunkInfo;
 
-  contains(address: IPCIDR.Address | string | BigInteger): boolean;
+  contains(address: IPCIDR.Address | string | BigInt): boolean;
 
   toString(): string;
 
@@ -33,20 +32,20 @@ declare class IPCIDR {
 
 declare namespace IPCIDR {
   type Address = Address4 | Address6;
-  type FormatResult = BigInteger | Address | string;
+  type FormatResult = BigInt | Address | string;
 
   interface FormatOptions {
     type?: "bigInteger" | "addressObject",
-    from?: string | number | BigInteger;
-    to?: string | number | BigInteger;
-    limit?: number | BigInteger;
+    from?: string | number | BigInt;
+    to?: string | number | BigInt;
+    limit?: number | BigInt;
   }
 
   interface ChunkInfo {
-    from: BigInteger;
-    to: BigInteger;
-    limit: BigInteger;
-    length: BigInteger;
+    from: BigInt;
+    to: BigInt;
+    limit: BigInt;
+    length: BigInt;
   }
   
   export function formatIP<T = FormatResult>(address: Address, options?: any): T;

@@ -1,153 +1,140 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 
-const ipAddress = require('ip-address');
-const BigInteger = require('jsbn').BigInteger;
-
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+var _ipAddress = _interopRequireDefault(require("ip-address"));
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 class IPCIDR {
   constructor(cidr) {
-    if(typeof cidr !== 'string' || !cidr.match('/')) {
+    if (typeof cidr !== 'string' || !cidr.match('/')) {
       throw new Error('Invalid CIDR address.');
     }
-
     const address = this.constructor.createAddress(cidr);
     this.cidr = address.address;
     this.ipAddressType = address.constructor;
     this.address = address;
     this.addressStart = address.startAddress();
-    this.addressEnd = address.endAddress();    
+    this.addressEnd = address.endAddress();
     this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
     this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
-    this.size = new BigInteger(this.addressEnd.bigInteger().subtract(this.addressStart.bigInteger()).add(new BigInteger('1')).toString());
+    const end = BigInt(this.addressEnd.bigInteger());
+    const start = BigInt(this.addressStart.bigInteger());
+    this.size = end - start + 1n;
   }
-  
   contains(address) {
     try {
-      if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
-        if(typeof address == 'object') {
+      if (!(address instanceof _ipAddress.default.Address6) && !(address instanceof _ipAddress.default.Address4)) {
+        if (typeof address == 'bigint') {
           address = this.ipAddressType.fromBigInteger(address);
-        }
-        else {
+        } else {
           address = this.constructor.createAddress(address);
         }
       }
-
-      return address.isInSubnet(this.address)
-    }
-    catch(err) {
+      return address.isInSubnet(this.address);
+    } catch (err) {
       return false;
-    }   
+    }
   }
-
   start(options) {
     return this.constructor.formatIP(this.addressStart, options);
   }
-
   end(options) {
     return this.constructor.formatIP(this.addressEnd, options);
   }
-
   toString() {
     return this.cidr;
   }
-
   toRange(options) {
     return [this.constructor.formatIP(this.addressStart, options), this.constructor.formatIP(this.addressEnd, options)];
   }
-
   toObject(options) {
     return {
       start: this.constructor.formatIP(this.addressStart, options),
       end: this.constructor.formatIP(this.addressEnd, options)
     };
   }
-
   toArray(options, results) {
     options = options || {};
     const list = [];
-    const start = this.constructor.formatIP(this.addressStart, { type: 'bigInteger' });
-    const end = this.constructor.formatIP(this.addressEnd, { type: 'bigInteger' });
-    const length = end.subtract(start).add(new BigInteger('1'));
+    const start = this.constructor.formatIP(this.addressStart, {
+      type: 'bigInteger'
+    });
+    const end = this.constructor.formatIP(this.addressEnd, {
+      type: 'bigInteger'
+    });
+    const length = end - start + 1n;
     const info = this.getChunkInfo(length, options);
-
-    if(results)  {
+    if (results) {
       Object.assign(results, info);
     }
-
-    this.loopInfo(info, (val) => {
-      const num = start.add(val);
+    this.loopInfo(info, val => {
+      const num = start + val;
       const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
       list.push(ip);
     });
-
     return list;
   }
-  
   loop(fn, options, results) {
     options = options || {};
     const promise = [];
-    const start = this.constructor.formatIP(this.addressStart, { type: 'bigInteger' });
-    const end = this.constructor.formatIP(this.addressEnd, { type: 'bigInteger' });
-    const length = end.subtract(start).add(new BigInteger('1'));
+    const start = this.constructor.formatIP(this.addressStart, {
+      type: 'bigInteger'
+    });
+    const end = this.constructor.formatIP(this.addressEnd, {
+      type: 'bigInteger'
+    });
+    const length = end - start + 1n;
     const info = this.getChunkInfo(length, options);
-    
-    if(results)  {
+    if (results) {
       Object.assign(results, info);
     }
-
-    this.loopInfo(info, (val) => {
-      const num = start.add(val);
+    this.loopInfo(info, val => {
+      const num = start + val;
       const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
       promise.push(fn(ip));
     });
-
     return Promise.all(promise);
   }
-
   loopInfo(info, fn) {
     let i = info.from;
-
-    while(i.compareTo(info.to) < 0) {
+    while (i < info.to) {
       fn(i);
-      i = i.add(new BigInteger('1'));
+      i = i + 1n;
     }
   }
-
   getChunkInfo(length, options) {
     let from = options.from;
     let limit = options.limit;
     let to = options.to;
     let maxLength;
-    const addressBigInteger = this.constructor.formatIP(this.address, { type: 'bigInteger' });
-
-    const getBigInteger = (val) => {
-      if(typeof val == 'string' && val.match(/:|\./)) {
-        return this.constructor.formatIP(this.constructor.createAddress(val), { type: 'bigInteger' }).subtract(addressBigInteger);
+    const addressBigInteger = this.constructor.formatIP(this.address, {
+      type: 'bigInteger'
+    });
+    const getBigInteger = val => {
+      if (typeof val == 'string' && val.match(/:|\./)) {
+        return this.constructor.formatIP(this.constructor.createAddress(val), {
+          type: 'bigInteger'
+        }) - addressBigInteger;
+      } else if (typeof val != 'object') {
+        return BigInt(val + '');
       }
-      else if(typeof val != 'object') {
-        return new BigInteger(val + '');
-      }
-
       return val;
-    }
-
-    from = getBigInteger(from !== undefined? from: 0);
-
-    if(to !== undefined) {
+    };
+    from = getBigInteger(from !== undefined ? from : 0);
+    if (to !== undefined) {
       to = getBigInteger(to);
-      limit = to.subtract(from);
+      limit = to - from;
+    } else {
+      limit = limit !== undefined ? getBigInteger(limit) : length;
     }
-    else {
-      limit = limit !== undefined? getBigInteger(limit): length;
-    }   
-
-    maxLength = length.subtract(from);
-    
-    if(limit.compareTo(maxLength) > 0) {
+    maxLength = length - from;
+    if (limit > maxLength) {
       limit = maxLength;
     }
-    
-    to = from.add(limit);
+    to = from + limit;
     return {
       from: from,
       to: to,
@@ -156,136 +143,78 @@ class IPCIDR {
     };
   }
 }
-
-IPCIDR.formatIP = function(address, options) {
+IPCIDR.formatIP = function (address, options) {
   options = options || {};
-
   if (options.type == "bigInteger") {
-    return new BigInteger(address.bigInteger().toString());
-  }
-  else if (options.type == "addressObject") {
+    return BigInt(address.bigInteger());
+  } else if (options.type == "addressObject") {
     return address;
   }
-
   return address.addressMinusSuffix;
-}
-
+};
 IPCIDR.createAddress = function (val) {
-  if(typeof val !== 'string') {
+  if (typeof val !== 'string') {
     throw new Error('Invalid IP address.');
   }
-
   val.match(/:.\./) && (val = val.split(':').pop());
-  const ipAddressType = val.match(":")? ipAddress.Address6: ipAddress.Address4;
+  const ipAddressType = val.match(":") ? _ipAddress.default.Address6 : _ipAddress.default.Address4;
   let ip = new ipAddressType(val);
-
-  if(ip.v4 && val.match(":") && ip.address4) {
+  if (ip.v4 && val.match(":") && ip.address4) {
     ip = ip.address4;
   }
-
-  if(ip.v4) {
+  if (ip.v4) {
     const parts = ip.addressMinusSuffix.split('.');
-
-    for(let i = 0; i < parts.length; i++) {
+    for (let i = 0; i < parts.length; i++) {
       const part = parts[i].split('/')[0];
-
-      if(part[0] == '0' && part.length > 1) {
+      if (part[0] == '0' && part.length > 1) {
         throw new Error('Invalid IPv4 address.');
       }
     }
   }
-
-  return ip
-}
-
+  return ip;
+};
 IPCIDR.isValidAddress = function (address) {
   try {
     return !!this.createAddress(address);
-  }
-  catch(err) {
+  } catch (err) {
     return false;
   }
-}
-
+};
 IPCIDR.isValidCIDR = function (address) {
-  if(typeof address !== 'string' || !address.match('/')) {
+  if (typeof address !== 'string' || !address.match('/')) {
     return false;
   }
-
   try {
     return !!this.createAddress(address);
-  }
-  catch(err) {
+  } catch (err) {
     return false;
   }
-}
-
-module.exports = IPCIDR;
-
-},{"ip-address":3,"jsbn":12}],2:[function(require,module,exports){
-window.IPCIDR = require('./index');
-},{"./index":1}],3:[function(require,module,exports){
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || function (mod) {
-    if (mod && mod.__esModule) return mod;
-    var result = {};
-    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
-    __setModuleDefault(result, mod);
-    return result;
 };
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.v6 = exports.Address6 = exports.Address4 = void 0;
-var ipv4_1 = require("./lib/ipv4");
-Object.defineProperty(exports, "Address4", { enumerable: true, get: function () { return ipv4_1.Address4; } });
-var ipv6_1 = require("./lib/ipv6");
-Object.defineProperty(exports, "Address6", { enumerable: true, get: function () { return ipv6_1.Address6; } });
-var helpers = __importStar(require("./lib/v6/helpers"));
-exports.v6 = { helpers: helpers };
+var _default = exports.default = IPCIDR;
 
-},{"./lib/ipv4":6,"./lib/ipv6":7,"./lib/v6/helpers":10}],4:[function(require,module,exports){
+},{"ip-address":5}],2:[function(require,module,exports){
 "use strict";
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
+
+var _index = _interopRequireDefault(require("./index.js"));
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+window.IPCIDR = _index.default;
+
+},{"./index.js":1}],3:[function(require,module,exports){
+"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AddressError = void 0;
-var AddressError = /** @class */ (function (_super) {
-    __extends(AddressError, _super);
-    function AddressError(message, parseMessage) {
-        var _this = _super.call(this, message) || this;
-        _this.name = 'AddressError';
+class AddressError extends Error {
+    constructor(message, parseMessage) {
+        super(message);
+        this.name = 'AddressError';
         if (parseMessage !== null) {
-            _this.parseMessage = parseMessage;
+            this.parseMessage = parseMessage;
         }
-        return _this;
     }
-    return AddressError;
-}(Error));
+}
 exports.AddressError = AddressError;
 
-},{}],5:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isCorrect = exports.isInSubnet = void 0;
@@ -312,12 +241,52 @@ function isCorrect(defaultBits) {
 }
 exports.isCorrect = isCorrect;
 
-},{}],6:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.v6 = exports.AddressError = exports.Address6 = exports.Address4 = void 0;
+const ipv4_1 = require("./ipv4");
+Object.defineProperty(exports, "Address4", { enumerable: true, get: function () { return ipv4_1.Address4; } });
+const ipv6_1 = require("./ipv6");
+Object.defineProperty(exports, "Address6", { enumerable: true, get: function () { return ipv6_1.Address6; } });
+const address_error_1 = require("./address-error");
+Object.defineProperty(exports, "AddressError", { enumerable: true, get: function () { return address_error_1.AddressError; } });
+const helpers = __importStar(require("./v6/helpers"));
+exports.v6 = { helpers };
+
+},{"./address-error":3,"./ipv4":6,"./ipv6":7,"./v6/helpers":10}],6:[function(require,module,exports){
 "use strict";
 /* eslint-disable no-param-reassign */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
 }) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
@@ -336,18 +305,18 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Address4 = void 0;
-var common = __importStar(require("./common"));
-var constants = __importStar(require("./v4/constants"));
-var address_error_1 = require("./address-error");
-var jsbn_1 = require("jsbn");
-var sprintf_js_1 = require("sprintf-js");
+const common = __importStar(require("./common"));
+const constants = __importStar(require("./v4/constants"));
+const address_error_1 = require("./address-error");
+const jsbn_1 = require("jsbn");
+const sprintf_js_1 = require("sprintf-js");
 /**
  * Represents an IPv4 address
  * @class Address4
  * @param {string} address - An IPv4 address string
  */
-var Address4 = /** @class */ (function () {
-    function Address4(address) {
+class Address4 {
+    constructor(address) {
         this.groups = constants.GROUPS;
         this.parsedAddress = [];
         this.parsedSubnet = '';
@@ -369,11 +338,11 @@ var Address4 = /** @class */ (function () {
          */
         this.isInSubnet = common.isInSubnet;
         this.address = address;
-        var subnet = constants.RE_SUBNET_STRING.exec(address);
+        const subnet = constants.RE_SUBNET_STRING.exec(address);
         if (subnet) {
             this.parsedSubnet = subnet[0].replace('/', '');
             this.subnetMask = parseInt(this.parsedSubnet, 10);
-            this.subnet = "/" + this.subnetMask;
+            this.subnet = `/${this.subnetMask}`;
             if (this.subnetMask < 0 || this.subnetMask > constants.BITS) {
                 throw new address_error_1.AddressError('Invalid subnet mask.');
             }
@@ -382,7 +351,7 @@ var Address4 = /** @class */ (function () {
         this.addressMinusSuffix = address;
         this.parsedAddress = this.parse(address);
     }
-    Address4.isValid = function (address) {
+    static isValid(address) {
         try {
             // eslint-disable-next-line no-new
             new Address4(address);
@@ -391,26 +360,26 @@ var Address4 = /** @class */ (function () {
         catch (e) {
             return false;
         }
-    };
+    }
     /*
      * Parses a v4 address
      */
-    Address4.prototype.parse = function (address) {
-        var groups = address.split('.');
+    parse(address) {
+        const groups = address.split('.');
         if (!address.match(constants.RE_ADDRESS)) {
             throw new address_error_1.AddressError('Invalid IPv4 address.');
         }
         return groups;
-    };
+    }
     /**
      * Returns the correct form of an address
      * @memberof Address4
      * @instance
      * @returns {String}
      */
-    Address4.prototype.correctForm = function () {
-        return this.parsedAddress.map(function (part) { return parseInt(part, 10); }).join('.');
-    };
+    correctForm() {
+        return this.parsedAddress.map((part) => parseInt(part, 10)).join('.');
+    }
     /**
      * Converts a hex string to an IPv4 address object
      * @memberof Address4
@@ -418,16 +387,16 @@ var Address4 = /** @class */ (function () {
      * @param {string} hex - a hex string to convert
      * @returns {Address4}
      */
-    Address4.fromHex = function (hex) {
-        var padded = hex.replace(/:/g, '').padStart(8, '0');
-        var groups = [];
-        var i;
+    static fromHex(hex) {
+        const padded = hex.replace(/:/g, '').padStart(8, '0');
+        const groups = [];
+        let i;
         for (i = 0; i < 8; i += 2) {
-            var h = padded.slice(i, i + 2);
+            const h = padded.slice(i, i + 2);
             groups.push(parseInt(h, 16));
         }
         return new Address4(groups.join('.'));
-    };
+    }
     /**
      * Converts an integer into a IPv4 address object
      * @memberof Address4
@@ -435,60 +404,76 @@ var Address4 = /** @class */ (function () {
      * @param {integer} integer - a number to convert
      * @returns {Address4}
      */
-    Address4.fromInteger = function (integer) {
+    static fromInteger(integer) {
         return Address4.fromHex(integer.toString(16));
-    };
+    }
+    /**
+     * Return an address from in-addr.arpa form
+     * @memberof Address4
+     * @static
+     * @param {string} arpaFormAddress - an 'in-addr.arpa' form ipv4 address
+     * @returns {Adress4}
+     * @example
+     * var address = Address4.fromArpa(42.2.0.192.in-addr.arpa.)
+     * address.correctForm(); // '192.0.2.42'
+     */
+    static fromArpa(arpaFormAddress) {
+        // remove ending ".in-addr.arpa." or just "."
+        const leader = arpaFormAddress.replace(/(\.in-addr\.arpa)?\.$/, '');
+        const address = leader.split('.').reverse().join('.');
+        return new Address4(address);
+    }
     /**
      * Converts an IPv4 address object to a hex string
      * @memberof Address4
      * @instance
      * @returns {String}
      */
-    Address4.prototype.toHex = function () {
-        return this.parsedAddress.map(function (part) { return sprintf_js_1.sprintf('%02x', parseInt(part, 10)); }).join(':');
-    };
+    toHex() {
+        return this.parsedAddress.map((part) => (0, sprintf_js_1.sprintf)('%02x', parseInt(part, 10))).join(':');
+    }
     /**
      * Converts an IPv4 address object to an array of bytes
      * @memberof Address4
      * @instance
      * @returns {Array}
      */
-    Address4.prototype.toArray = function () {
-        return this.parsedAddress.map(function (part) { return parseInt(part, 10); });
-    };
+    toArray() {
+        return this.parsedAddress.map((part) => parseInt(part, 10));
+    }
     /**
      * Converts an IPv4 address object to an IPv6 address group
      * @memberof Address4
      * @instance
      * @returns {String}
      */
-    Address4.prototype.toGroup6 = function () {
-        var output = [];
-        var i;
+    toGroup6() {
+        const output = [];
+        let i;
         for (i = 0; i < constants.GROUPS; i += 2) {
-            var hex = sprintf_js_1.sprintf('%02x%02x', parseInt(this.parsedAddress[i], 10), parseInt(this.parsedAddress[i + 1], 10));
-            output.push(sprintf_js_1.sprintf('%x', parseInt(hex, 16)));
+            const hex = (0, sprintf_js_1.sprintf)('%02x%02x', parseInt(this.parsedAddress[i], 10), parseInt(this.parsedAddress[i + 1], 10));
+            output.push((0, sprintf_js_1.sprintf)('%x', parseInt(hex, 16)));
         }
         return output.join(':');
-    };
+    }
     /**
      * Returns the address as a BigInteger
      * @memberof Address4
      * @instance
      * @returns {BigInteger}
      */
-    Address4.prototype.bigInteger = function () {
-        return new jsbn_1.BigInteger(this.parsedAddress.map(function (n) { return sprintf_js_1.sprintf('%02x', parseInt(n, 10)); }).join(''), 16);
-    };
+    bigInteger() {
+        return new jsbn_1.BigInteger(this.parsedAddress.map((n) => (0, sprintf_js_1.sprintf)('%02x', parseInt(n, 10))).join(''), 16);
+    }
     /**
      * Helper function getting start address.
      * @memberof Address4
      * @instance
      * @returns {BigInteger}
      */
-    Address4.prototype._startAddress = function () {
+    _startAddress() {
         return new jsbn_1.BigInteger(this.mask() + '0'.repeat(constants.BITS - this.subnetMask), 2);
-    };
+    }
     /**
      * The first address in the range given by this address' subnet.
      * Often referred to as the Network Address.
@@ -496,9 +481,9 @@ var Address4 = /** @class */ (function () {
      * @instance
      * @returns {Address4}
      */
-    Address4.prototype.startAddress = function () {
+    startAddress() {
         return Address4.fromBigInteger(this._startAddress());
-    };
+    }
     /**
      * The first host address in the range given by this address's subnet ie
      * the first address after the Network Address
@@ -506,19 +491,19 @@ var Address4 = /** @class */ (function () {
      * @instance
      * @returns {Address4}
      */
-    Address4.prototype.startAddressExclusive = function () {
-        var adjust = new jsbn_1.BigInteger('1');
+    startAddressExclusive() {
+        const adjust = new jsbn_1.BigInteger('1');
         return Address4.fromBigInteger(this._startAddress().add(adjust));
-    };
+    }
     /**
      * Helper function getting end address.
      * @memberof Address4
      * @instance
      * @returns {BigInteger}
      */
-    Address4.prototype._endAddress = function () {
+    _endAddress() {
         return new jsbn_1.BigInteger(this.mask() + '1'.repeat(constants.BITS - this.subnetMask), 2);
-    };
+    }
     /**
      * The last address in the range given by this address' subnet
      * Often referred to as the Broadcast
@@ -526,9 +511,9 @@ var Address4 = /** @class */ (function () {
      * @instance
      * @returns {Address4}
      */
-    Address4.prototype.endAddress = function () {
+    endAddress() {
         return Address4.fromBigInteger(this._endAddress());
-    };
+    }
     /**
      * The last host address in the range given by this address's subnet ie
      * the last address prior to the Broadcast Address
@@ -536,10 +521,10 @@ var Address4 = /** @class */ (function () {
      * @instance
      * @returns {Address4}
      */
-    Address4.prototype.endAddressExclusive = function () {
-        var adjust = new jsbn_1.BigInteger('1');
+    endAddressExclusive() {
+        const adjust = new jsbn_1.BigInteger('1');
         return Address4.fromBigInteger(this._endAddress().subtract(adjust));
-    };
+    }
     /**
      * Converts a BigInteger to a v4 address object
      * @memberof Address4
@@ -547,9 +532,9 @@ var Address4 = /** @class */ (function () {
      * @param {BigInteger} bigInteger - a BigInteger to convert
      * @returns {Address4}
      */
-    Address4.fromBigInteger = function (bigInteger) {
+    static fromBigInteger(bigInteger) {
         return Address4.fromInteger(parseInt(bigInteger.toString(), 10));
-    };
+    }
     /**
      * Returns the first n bits of the address, defaulting to the
      * subnet mask
@@ -557,58 +542,79 @@ var Address4 = /** @class */ (function () {
      * @instance
      * @returns {String}
      */
-    Address4.prototype.mask = function (mask) {
+    mask(mask) {
         if (mask === undefined) {
             mask = this.subnetMask;
         }
         return this.getBitsBase2(0, mask);
-    };
+    }
     /**
      * Returns the bits in the given range as a base-2 string
      * @memberof Address4
      * @instance
      * @returns {string}
      */
-    Address4.prototype.getBitsBase2 = function (start, end) {
+    getBitsBase2(start, end) {
         return this.binaryZeroPad().slice(start, end);
-    };
+    }
+    /**
+     * Return the reversed ip6.arpa form of the address
+     * @memberof Address4
+     * @param {Object} options
+     * @param {boolean} options.omitSuffix - omit the "in-addr.arpa" suffix
+     * @instance
+     * @returns {String}
+     */
+    reverseForm(options) {
+        if (!options) {
+            options = {};
+        }
+        const reversed = this.correctForm().split('.').reverse().join('.');
+        if (options.omitSuffix) {
+            return reversed;
+        }
+        return (0, sprintf_js_1.sprintf)('%s.in-addr.arpa.', reversed);
+    }
     /**
      * Returns true if the given address is a multicast address
      * @memberof Address4
      * @instance
      * @returns {boolean}
      */
-    Address4.prototype.isMulticast = function () {
+    isMulticast() {
         return this.isInSubnet(new Address4('224.0.0.0/4'));
-    };
+    }
     /**
      * Returns a zero-padded base-2 string representation of the address
      * @memberof Address4
      * @instance
      * @returns {string}
      */
-    Address4.prototype.binaryZeroPad = function () {
+    binaryZeroPad() {
         return this.bigInteger().toString(2).padStart(constants.BITS, '0');
-    };
+    }
     /**
      * Groups an IPv4 address for inclusion at the end of an IPv6 address
      * @returns {String}
      */
-    Address4.prototype.groupForV6 = function () {
-        var segments = this.parsedAddress;
-        return this.address.replace(constants.RE_ADDRESS, sprintf_js_1.sprintf('<span class="hover-group group-v4 group-6">%s</span>.<span class="hover-group group-v4 group-7">%s</span>', segments.slice(0, 2).join('.'), segments.slice(2, 4).join('.')));
-    };
-    return Address4;
-}());
+    groupForV6() {
+        const segments = this.parsedAddress;
+        return this.address.replace(constants.RE_ADDRESS, (0, sprintf_js_1.sprintf)('<span class="hover-group group-v4 group-6">%s</span>.<span class="hover-group group-v4 group-7">%s</span>', segments.slice(0, 2).join('.'), segments.slice(2, 4).join('.')));
+    }
+}
 exports.Address4 = Address4;
 
-},{"./address-error":4,"./common":5,"./v4/constants":8,"jsbn":12,"sprintf-js":13}],7:[function(require,module,exports){
+},{"./address-error":3,"./common":4,"./v4/constants":8,"jsbn":12,"sprintf-js":13}],7:[function(require,module,exports){
 "use strict";
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-param-reassign */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
 }) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
@@ -625,31 +631,24 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
-var __spreadArrays = (this && this.__spreadArrays) || function () {
-    for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-    for (var r = Array(s), k = 0, i = 0; i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++)
-            r[k] = a[j];
-    return r;
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Address6 = void 0;
-var common = __importStar(require("./common"));
-var constants4 = __importStar(require("./v4/constants"));
-var constants6 = __importStar(require("./v6/constants"));
-var helpers = __importStar(require("./v6/helpers"));
-var ipv4_1 = require("./ipv4");
-var regular_expressions_1 = require("./v6/regular-expressions");
-var address_error_1 = require("./address-error");
-var jsbn_1 = require("jsbn");
-var sprintf_js_1 = require("sprintf-js");
+const common = __importStar(require("./common"));
+const constants4 = __importStar(require("./v4/constants"));
+const constants6 = __importStar(require("./v6/constants"));
+const helpers = __importStar(require("./v6/helpers"));
+const ipv4_1 = require("./ipv4");
+const regular_expressions_1 = require("./v6/regular-expressions");
+const address_error_1 = require("./address-error");
+const jsbn_1 = require("jsbn");
+const sprintf_js_1 = require("sprintf-js");
 function assert(condition) {
     if (!condition) {
         throw new Error('Assertion failed.');
     }
 }
 function addCommas(number) {
-    var r = /(\d+)(\d{3})/;
+    const r = /(\d+)(\d{3})/;
     while (r.test(number)) {
         number = number.replace(r, '$1,$2');
     }
@@ -664,9 +663,9 @@ function spanLeadingZeroes4(n) {
  * A helper function to compact an array
  */
 function compact(address, slice) {
-    var s1 = [];
-    var s2 = [];
-    var i;
+    const s1 = [];
+    const s2 = [];
+    let i;
     for (i = 0; i < address.length; i++) {
         if (i < slice[0]) {
             s1.push(address[i]);
@@ -678,7 +677,7 @@ function compact(address, slice) {
     return s1.concat(['compact']).concat(s2);
 }
 function paddedHex(octet) {
-    return sprintf_js_1.sprintf('%04x', parseInt(octet, 16));
+    return (0, sprintf_js_1.sprintf)('%04x', parseInt(octet, 16));
 }
 function unsignByte(b) {
     // eslint-disable-next-line no-bitwise
@@ -692,8 +691,8 @@ function unsignByte(b) {
  * @example
  * var address = new Address6('2001::/32');
  */
-var Address6 = /** @class */ (function () {
-    function Address6(address, optionalGroups) {
+class Address6 {
+    constructor(address, optionalGroups) {
         this.addressMinusSuffix = '';
         this.parsedSubnet = '';
         this.subnet = '/128';
@@ -722,11 +721,11 @@ var Address6 = /** @class */ (function () {
             this.groups = optionalGroups;
         }
         this.address = address;
-        var subnet = constants6.RE_SUBNET_STRING.exec(address);
+        const subnet = constants6.RE_SUBNET_STRING.exec(address);
         if (subnet) {
             this.parsedSubnet = subnet[0].replace('/', '');
             this.subnetMask = parseInt(this.parsedSubnet, 10);
-            this.subnet = "/" + this.subnetMask;
+            this.subnet = `/${this.subnetMask}`;
             if (Number.isNaN(this.subnetMask) ||
                 this.subnetMask < 0 ||
                 this.subnetMask > constants6.BITS) {
@@ -737,7 +736,7 @@ var Address6 = /** @class */ (function () {
         else if (/\//.test(address)) {
             throw new address_error_1.AddressError('Invalid subnet mask.');
         }
-        var zone = constants6.RE_ZONE_STRING.exec(address);
+        const zone = constants6.RE_ZONE_STRING.exec(address);
         if (zone) {
             this.zone = zone[0];
             address = address.replace(constants6.RE_ZONE_STRING, '');
@@ -745,7 +744,7 @@ var Address6 = /** @class */ (function () {
         this.addressMinusSuffix = address;
         this.parsedAddress = this.parse(this.addressMinusSuffix);
     }
-    Address6.isValid = function (address) {
+    static isValid(address) {
         try {
             // eslint-disable-next-line no-new
             new Address6(address);
@@ -754,7 +753,7 @@ var Address6 = /** @class */ (function () {
         catch (e) {
             return false;
         }
-    };
+    }
     /**
      * Convert a BigInteger to a v6 address object
      * @memberof Address6
@@ -766,15 +765,15 @@ var Address6 = /** @class */ (function () {
      * var address = Address6.fromBigInteger(bigInteger);
      * address.correctForm(); // '::e8:d4a5:1000'
      */
-    Address6.fromBigInteger = function (bigInteger) {
-        var hex = bigInteger.toString(16).padStart(32, '0');
-        var groups = [];
-        var i;
+    static fromBigInteger(bigInteger) {
+        const hex = bigInteger.toString(16).padStart(32, '0');
+        const groups = [];
+        let i;
         for (i = 0; i < constants6.GROUPS; i++) {
             groups.push(hex.slice(i * 4, (i + 1) * 4));
         }
         return new Address6(groups.join(':'));
-    };
+    }
     /**
      * Convert a URL (with optional port number) to an address object
      * @memberof Address6
@@ -785,10 +784,10 @@ var Address6 = /** @class */ (function () {
      * addressAndPort.address.correctForm(); // 'ffff::'
      * addressAndPort.port; // 8080
      */
-    Address6.fromURL = function (url) {
-        var host;
-        var port = null;
-        var result;
+    static fromURL(url) {
+        let host;
+        let port = null;
+        let result;
         // If we have brackets parse them and find a port
         if (url.indexOf('[') !== -1 && url.indexOf(']:') !== -1) {
             result = constants6.RE_URL_WITH_PORT.exec(url);
@@ -835,9 +834,9 @@ var Address6 = /** @class */ (function () {
         }
         return {
             address: new Address6(host),
-            port: port,
+            port,
         };
-    };
+    }
     /**
      * Create an IPv6-mapped address given an IPv4 address
      * @memberof Address6
@@ -849,11 +848,11 @@ var Address6 = /** @class */ (function () {
      * address.correctForm(); // '::ffff:c0a8:1'
      * address.to4in6(); // '::ffff:192.168.0.1'
      */
-    Address6.fromAddress4 = function (address) {
-        var address4 = new ipv4_1.Address4(address);
-        var mask6 = constants6.BITS - (constants4.BITS - address4.subnetMask);
-        return new Address6("::ffff:" + address4.correctForm() + "/" + mask6);
-    };
+    static fromAddress4(address) {
+        const address4 = new ipv4_1.Address4(address);
+        const mask6 = constants6.BITS - (constants4.BITS - address4.subnetMask);
+        return new Address6(`::ffff:${address4.correctForm()}/${mask6}`);
+    }
     /**
      * Return an address from ip6.arpa form
      * @memberof Address6
@@ -864,31 +863,31 @@ var Address6 = /** @class */ (function () {
      * var address = Address6.fromArpa(e.f.f.f.3.c.2.6.f.f.f.e.6.6.8.e.1.0.6.7.9.4.e.c.0.0.0.0.1.0.0.2.ip6.arpa.)
      * address.correctForm(); // '2001:0:ce49:7601:e866:efff:62c3:fffe'
      */
-    Address6.fromArpa = function (arpaFormAddress) {
+    static fromArpa(arpaFormAddress) {
         // remove ending ".ip6.arpa." or just "."
-        var address = arpaFormAddress.replace(/(\.ip6\.arpa)?\.$/, '');
-        var semicolonAmount = 7;
+        let address = arpaFormAddress.replace(/(\.ip6\.arpa)?\.$/, '');
+        const semicolonAmount = 7;
         // correct ip6.arpa form with ending removed will be 63 characters
         if (address.length !== 63) {
             throw new address_error_1.AddressError("Invalid 'ip6.arpa' form.");
         }
-        var parts = address.split('.').reverse();
-        for (var i = semicolonAmount; i > 0; i--) {
-            var insertIndex = i * 4;
+        const parts = address.split('.').reverse();
+        for (let i = semicolonAmount; i > 0; i--) {
+            const insertIndex = i * 4;
             parts.splice(insertIndex, 0, ':');
         }
         address = parts.join('');
         return new Address6(address);
-    };
+    }
     /**
      * Return the Microsoft UNC transcription of the address
      * @memberof Address6
      * @instance
      * @returns {String} the Microsoft UNC transcription of the address
      */
-    Address6.prototype.microsoftTranscription = function () {
-        return sprintf_js_1.sprintf('%s.ipv6-literal.net', this.correctForm().replace(/:/g, '-'));
-    };
+    microsoftTranscription() {
+        return (0, sprintf_js_1.sprintf)('%s.ipv6-literal.net', this.correctForm().replace(/:/g, '-'));
+    }
     /**
      * Return the first n bits of the address, defaulting to the subnet mask
      * @memberof Address6
@@ -896,10 +895,9 @@ var Address6 = /** @class */ (function () {
      * @param {number} [mask=subnet] - the number of bits to mask
      * @returns {String} the first n bits of the address as a string
      */
-    Address6.prototype.mask = function (mask) {
-        if (mask === void 0) { mask = this.subnetMask; }
+    mask(mask = this.subnetMask) {
         return this.getBitsBase2(0, mask);
-    };
+    }
     /**
      * Return the number of possible subnets of a given size in the address
      * @memberof Address6
@@ -908,25 +906,24 @@ var Address6 = /** @class */ (function () {
      * @returns {String}
      */
     // TODO: probably useful to have a numeric version of this too
-    Address6.prototype.possibleSubnets = function (subnetSize) {
-        if (subnetSize === void 0) { subnetSize = 128; }
-        var availableBits = constants6.BITS - this.subnetMask;
-        var subnetBits = Math.abs(subnetSize - constants6.BITS);
-        var subnetPowers = availableBits - subnetBits;
+    possibleSubnets(subnetSize = 128) {
+        const availableBits = constants6.BITS - this.subnetMask;
+        const subnetBits = Math.abs(subnetSize - constants6.BITS);
+        const subnetPowers = availableBits - subnetBits;
         if (subnetPowers < 0) {
             return '0';
         }
         return addCommas(new jsbn_1.BigInteger('2', 10).pow(subnetPowers).toString(10));
-    };
+    }
     /**
      * Helper function getting start address.
      * @memberof Address6
      * @instance
      * @returns {BigInteger}
      */
-    Address6.prototype._startAddress = function () {
+    _startAddress() {
         return new jsbn_1.BigInteger(this.mask() + '0'.repeat(constants6.BITS - this.subnetMask), 2);
-    };
+    }
     /**
      * The first address in the range given by this address' subnet
      * Often referred to as the Network Address.
@@ -934,9 +931,9 @@ var Address6 = /** @class */ (function () {
      * @instance
      * @returns {Address6}
      */
-    Address6.prototype.startAddress = function () {
+    startAddress() {
         return Address6.fromBigInteger(this._startAddress());
-    };
+    }
     /**
      * The first host address in the range given by this address's subnet ie
      * the first address after the Network Address
@@ -944,19 +941,19 @@ var Address6 = /** @class */ (function () {
      * @instance
      * @returns {Address6}
      */
-    Address6.prototype.startAddressExclusive = function () {
-        var adjust = new jsbn_1.BigInteger('1');
+    startAddressExclusive() {
+        const adjust = new jsbn_1.BigInteger('1');
         return Address6.fromBigInteger(this._startAddress().add(adjust));
-    };
+    }
     /**
      * Helper function getting end address.
      * @memberof Address6
      * @instance
      * @returns {BigInteger}
      */
-    Address6.prototype._endAddress = function () {
+    _endAddress() {
         return new jsbn_1.BigInteger(this.mask() + '1'.repeat(constants6.BITS - this.subnetMask), 2);
-    };
+    }
     /**
      * The last address in the range given by this address' subnet
      * Often referred to as the Broadcast
@@ -964,9 +961,9 @@ var Address6 = /** @class */ (function () {
      * @instance
      * @returns {Address6}
      */
-    Address6.prototype.endAddress = function () {
+    endAddress() {
         return Address6.fromBigInteger(this._endAddress());
-    };
+    }
     /**
      * The last host address in the range given by this address's subnet ie
      * the last address prior to the Broadcast Address
@@ -974,80 +971,79 @@ var Address6 = /** @class */ (function () {
      * @instance
      * @returns {Address6}
      */
-    Address6.prototype.endAddressExclusive = function () {
-        var adjust = new jsbn_1.BigInteger('1');
+    endAddressExclusive() {
+        const adjust = new jsbn_1.BigInteger('1');
         return Address6.fromBigInteger(this._endAddress().subtract(adjust));
-    };
+    }
     /**
      * Return the scope of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.getScope = function () {
-        var scope = constants6.SCOPES[this.getBits(12, 16).intValue()];
+    getScope() {
+        let scope = constants6.SCOPES[this.getBits(12, 16).intValue()];
         if (this.getType() === 'Global unicast' && scope !== 'Link local') {
             scope = 'Global';
         }
         return scope || 'Unknown';
-    };
+    }
     /**
      * Return the type of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.getType = function () {
-        for (var _i = 0, _a = Object.keys(constants6.TYPES); _i < _a.length; _i++) {
-            var subnet = _a[_i];
+    getType() {
+        for (const subnet of Object.keys(constants6.TYPES)) {
             if (this.isInSubnet(new Address6(subnet))) {
                 return constants6.TYPES[subnet];
             }
         }
         return 'Global unicast';
-    };
+    }
     /**
      * Return the bits in the given range as a BigInteger
      * @memberof Address6
      * @instance
      * @returns {BigInteger}
      */
-    Address6.prototype.getBits = function (start, end) {
+    getBits(start, end) {
         return new jsbn_1.BigInteger(this.getBitsBase2(start, end), 2);
-    };
+    }
     /**
      * Return the bits in the given range as a base-2 string
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.getBitsBase2 = function (start, end) {
+    getBitsBase2(start, end) {
         return this.binaryZeroPad().slice(start, end);
-    };
+    }
     /**
      * Return the bits in the given range as a base-16 string
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.getBitsBase16 = function (start, end) {
-        var length = end - start;
+    getBitsBase16(start, end) {
+        const length = end - start;
         if (length % 4 !== 0) {
             throw new Error('Length of bits to retrieve must be divisible by four');
         }
         return this.getBits(start, end)
             .toString(16)
             .padStart(length / 4, '0');
-    };
+    }
     /**
      * Return the bits that are set past the subnet mask length
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.getBitsPastSubnet = function () {
+    getBitsPastSubnet() {
         return this.getBitsBase2(this.subnetMask, constants6.BITS);
-    };
+    }
     /**
      * Return the reversed ip6.arpa form of the address
      * @memberof Address6
@@ -1056,12 +1052,12 @@ var Address6 = /** @class */ (function () {
      * @instance
      * @returns {String}
      */
-    Address6.prototype.reverseForm = function (options) {
+    reverseForm(options) {
         if (!options) {
             options = {};
         }
-        var characters = Math.floor(this.subnetMask / 4);
-        var reversed = this.canonicalForm()
+        const characters = Math.floor(this.subnetMask / 4);
+        const reversed = this.canonicalForm()
             .replace(/:/g, '')
             .split('')
             .slice(0, characters)
@@ -1071,26 +1067,26 @@ var Address6 = /** @class */ (function () {
             if (options.omitSuffix) {
                 return reversed;
             }
-            return sprintf_js_1.sprintf('%s.ip6.arpa.', reversed);
+            return (0, sprintf_js_1.sprintf)('%s.ip6.arpa.', reversed);
         }
         if (options.omitSuffix) {
             return '';
         }
         return 'ip6.arpa.';
-    };
+    }
     /**
      * Return the correct form of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.correctForm = function () {
-        var i;
-        var groups = [];
-        var zeroCounter = 0;
-        var zeroes = [];
+    correctForm() {
+        let i;
+        let groups = [];
+        let zeroCounter = 0;
+        const zeroes = [];
         for (i = 0; i < this.parsedAddress.length; i++) {
-            var value = parseInt(this.parsedAddress[i], 16);
+            const value = parseInt(this.parsedAddress[i], 16);
             if (value === 0) {
                 zeroCounter++;
             }
@@ -1105,9 +1101,9 @@ var Address6 = /** @class */ (function () {
         if (zeroCounter > 1) {
             zeroes.push([this.parsedAddress.length - zeroCounter, this.parsedAddress.length - 1]);
         }
-        var zeroLengths = zeroes.map(function (n) { return n[1] - n[0] + 1; });
+        const zeroLengths = zeroes.map((n) => n[1] - n[0] + 1);
         if (zeroes.length > 0) {
-            var index = zeroLengths.indexOf(Math.max.apply(Math, zeroLengths));
+            const index = zeroLengths.indexOf(Math.max(...zeroLengths));
             groups = compact(this.parsedAddress, zeroes[index]);
         }
         else {
@@ -1118,12 +1114,12 @@ var Address6 = /** @class */ (function () {
                 groups[i] = parseInt(groups[i], 16).toString(16);
             }
         }
-        var correct = groups.join(':');
+        let correct = groups.join(':');
         correct = correct.replace(/^compact$/, '::');
         correct = correct.replace(/^compact|compact$/, ':');
         correct = correct.replace(/compact/, '');
         return correct;
-    };
+    }
     /**
      * Return a zero-padded base-2 string representation of the address
      * @memberof Address6
@@ -1135,18 +1131,18 @@ var Address6 = /** @class */ (function () {
      * // '0010000000000001010010000110000001000000000000010000100000000011
      * //  0000000000000000000000000000000000000000000000000001000000010001'
      */
-    Address6.prototype.binaryZeroPad = function () {
+    binaryZeroPad() {
         return this.bigInteger().toString(2).padStart(constants6.BITS, '0');
-    };
+    }
     // TODO: Improve the semantics of this helper function
-    Address6.prototype.parse4in6 = function (address) {
-        var groups = address.split(':');
-        var lastGroup = groups.slice(-1)[0];
-        var address4 = lastGroup.match(constants4.RE_ADDRESS);
+    parse4in6(address) {
+        const groups = address.split(':');
+        const lastGroup = groups.slice(-1)[0];
+        const address4 = lastGroup.match(constants4.RE_ADDRESS);
         if (address4) {
             this.parsedAddress4 = address4[0];
             this.address4 = new ipv4_1.Address4(this.parsedAddress4);
-            for (var i = 0; i < this.address4.groups; i++) {
+            for (let i = 0; i < this.address4.groups; i++) {
                 if (/^0[0-9]+/.test(this.address4.parsedAddress[i])) {
                     throw new address_error_1.AddressError("IPv4 addresses can't have leading zeroes.", address.replace(constants4.RE_ADDRESS, this.address4.parsedAddress.map(spanLeadingZeroes4).join('.')));
                 }
@@ -1156,30 +1152,30 @@ var Address6 = /** @class */ (function () {
             address = groups.join(':');
         }
         return address;
-    };
+    }
     // TODO: Make private?
-    Address6.prototype.parse = function (address) {
+    parse(address) {
         address = this.parse4in6(address);
-        var badCharacters = address.match(constants6.RE_BAD_CHARACTERS);
+        const badCharacters = address.match(constants6.RE_BAD_CHARACTERS);
         if (badCharacters) {
-            throw new address_error_1.AddressError(sprintf_js_1.sprintf('Bad character%s detected in address: %s', badCharacters.length > 1 ? 's' : '', badCharacters.join('')), address.replace(constants6.RE_BAD_CHARACTERS, '<span class="parse-error">$1</span>'));
+            throw new address_error_1.AddressError((0, sprintf_js_1.sprintf)('Bad character%s detected in address: %s', badCharacters.length > 1 ? 's' : '', badCharacters.join('')), address.replace(constants6.RE_BAD_CHARACTERS, '<span class="parse-error">$1</span>'));
         }
-        var badAddress = address.match(constants6.RE_BAD_ADDRESS);
+        const badAddress = address.match(constants6.RE_BAD_ADDRESS);
         if (badAddress) {
-            throw new address_error_1.AddressError(sprintf_js_1.sprintf('Address failed regex: %s', badAddress.join('')), address.replace(constants6.RE_BAD_ADDRESS, '<span class="parse-error">$1</span>'));
+            throw new address_error_1.AddressError((0, sprintf_js_1.sprintf)('Address failed regex: %s', badAddress.join('')), address.replace(constants6.RE_BAD_ADDRESS, '<span class="parse-error">$1</span>'));
         }
-        var groups = [];
-        var halves = address.split('::');
+        let groups = [];
+        const halves = address.split('::');
         if (halves.length === 2) {
-            var first = halves[0].split(':');
-            var last = halves[1].split(':');
+            let first = halves[0].split(':');
+            let last = halves[1].split(':');
             if (first.length === 1 && first[0] === '') {
                 first = [];
             }
             if (last.length === 1 && last[0] === '') {
                 last = [];
             }
-            var remaining = this.groups - (first.length + last.length);
+            const remaining = this.groups - (first.length + last.length);
             if (!remaining) {
                 throw new address_error_1.AddressError('Error parsing groups');
             }
@@ -1187,7 +1183,7 @@ var Address6 = /** @class */ (function () {
             this.elisionBegin = first.length;
             this.elisionEnd = first.length + this.elidedGroups;
             groups = groups.concat(first);
-            for (var i = 0; i < remaining; i++) {
+            for (let i = 0; i < remaining; i++) {
                 groups.push('0');
             }
             groups = groups.concat(last);
@@ -1199,39 +1195,39 @@ var Address6 = /** @class */ (function () {
         else {
             throw new address_error_1.AddressError('Too many :: groups found');
         }
-        groups = groups.map(function (group) { return sprintf_js_1.sprintf('%x', parseInt(group, 16)); });
+        groups = groups.map((group) => (0, sprintf_js_1.sprintf)('%x', parseInt(group, 16)));
         if (groups.length !== this.groups) {
             throw new address_error_1.AddressError('Incorrect number of groups found');
         }
         return groups;
-    };
+    }
     /**
      * Return the canonical form of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.canonicalForm = function () {
+    canonicalForm() {
         return this.parsedAddress.map(paddedHex).join(':');
-    };
+    }
     /**
      * Return the decimal form of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.decimal = function () {
-        return this.parsedAddress.map(function (n) { return sprintf_js_1.sprintf('%05d', parseInt(n, 16)); }).join(':');
-    };
+    decimal() {
+        return this.parsedAddress.map((n) => (0, sprintf_js_1.sprintf)('%05d', parseInt(n, 16))).join(':');
+    }
     /**
      * Return the address as a BigInteger
      * @memberof Address6
      * @instance
      * @returns {BigInteger}
      */
-    Address6.prototype.bigInteger = function () {
+    bigInteger() {
         return new jsbn_1.BigInteger(this.parsedAddress.map(paddedHex).join(''), 16);
-    };
+    }
     /**
      * Return the last two groups of this address as an IPv4 address string
      * @memberof Address6
@@ -1241,33 +1237,33 @@ var Address6 = /** @class */ (function () {
      * var address = new Address6('2001:4860:4001::1825:bf11');
      * address.to4().correctForm(); // '24.37.191.17'
      */
-    Address6.prototype.to4 = function () {
-        var binary = this.binaryZeroPad().split('');
+    to4() {
+        const binary = this.binaryZeroPad().split('');
         return ipv4_1.Address4.fromHex(new jsbn_1.BigInteger(binary.slice(96, 128).join(''), 2).toString(16));
-    };
+    }
     /**
      * Return the v4-in-v6 form of the address
      * @memberof Address6
      * @instance
      * @returns {String}
      */
-    Address6.prototype.to4in6 = function () {
-        var address4 = this.to4();
-        var address6 = new Address6(this.parsedAddress.slice(0, 6).join(':'), 6);
-        var correct = address6.correctForm();
-        var infix = '';
+    to4in6() {
+        const address4 = this.to4();
+        const address6 = new Address6(this.parsedAddress.slice(0, 6).join(':'), 6);
+        const correct = address6.correctForm();
+        let infix = '';
         if (!/:$/.test(correct)) {
             infix = ':';
         }
         return correct + infix + address4.address;
-    };
+    }
     /**
      * Return an object containing the Teredo properties of the address
      * @memberof Address6
      * @instance
      * @returns {Object}
      */
-    Address6.prototype.inspectTeredo = function () {
+    inspectTeredo() {
         /*
         - Bits 0 to 31 are set to the Teredo prefix (normally 2001:0000::/32).
         - Bits 32 to 63 embed the primary IPv4 address of the Teredo server that
@@ -1289,61 +1285,61 @@ var Address6 = /** @class */ (function () {
         - Bits 96 to 127 contains the obfuscated IPv4 address. This is the
           public IPv4 address of the NAT with all bits inverted.
         */
-        var prefix = this.getBitsBase16(0, 32);
-        var udpPort = this.getBits(80, 96).xor(new jsbn_1.BigInteger('ffff', 16)).toString();
-        var server4 = ipv4_1.Address4.fromHex(this.getBitsBase16(32, 64));
-        var client4 = ipv4_1.Address4.fromHex(this.getBits(96, 128).xor(new jsbn_1.BigInteger('ffffffff', 16)).toString(16));
-        var flags = this.getBits(64, 80);
-        var flagsBase2 = this.getBitsBase2(64, 80);
-        var coneNat = flags.testBit(15);
-        var reserved = flags.testBit(14);
-        var groupIndividual = flags.testBit(8);
-        var universalLocal = flags.testBit(9);
-        var nonce = new jsbn_1.BigInteger(flagsBase2.slice(2, 6) + flagsBase2.slice(8, 16), 2).toString(10);
+        const prefix = this.getBitsBase16(0, 32);
+        const udpPort = this.getBits(80, 96).xor(new jsbn_1.BigInteger('ffff', 16)).toString();
+        const server4 = ipv4_1.Address4.fromHex(this.getBitsBase16(32, 64));
+        const client4 = ipv4_1.Address4.fromHex(this.getBits(96, 128).xor(new jsbn_1.BigInteger('ffffffff', 16)).toString(16));
+        const flags = this.getBits(64, 80);
+        const flagsBase2 = this.getBitsBase2(64, 80);
+        const coneNat = flags.testBit(15);
+        const reserved = flags.testBit(14);
+        const groupIndividual = flags.testBit(8);
+        const universalLocal = flags.testBit(9);
+        const nonce = new jsbn_1.BigInteger(flagsBase2.slice(2, 6) + flagsBase2.slice(8, 16), 2).toString(10);
         return {
-            prefix: sprintf_js_1.sprintf('%s:%s', prefix.slice(0, 4), prefix.slice(4, 8)),
+            prefix: (0, sprintf_js_1.sprintf)('%s:%s', prefix.slice(0, 4), prefix.slice(4, 8)),
             server4: server4.address,
             client4: client4.address,
             flags: flagsBase2,
-            coneNat: coneNat,
+            coneNat,
             microsoft: {
-                reserved: reserved,
-                universalLocal: universalLocal,
-                groupIndividual: groupIndividual,
-                nonce: nonce,
+                reserved,
+                universalLocal,
+                groupIndividual,
+                nonce,
             },
-            udpPort: udpPort,
+            udpPort,
         };
-    };
+    }
     /**
      * Return an object containing the 6to4 properties of the address
      * @memberof Address6
      * @instance
      * @returns {Object}
      */
-    Address6.prototype.inspect6to4 = function () {
+    inspect6to4() {
         /*
         - Bits 0 to 15 are set to the 6to4 prefix (2002::/16).
         - Bits 16 to 48 embed the IPv4 address of the 6to4 gateway that is used.
         */
-        var prefix = this.getBitsBase16(0, 16);
-        var gateway = ipv4_1.Address4.fromHex(this.getBitsBase16(16, 48));
+        const prefix = this.getBitsBase16(0, 16);
+        const gateway = ipv4_1.Address4.fromHex(this.getBitsBase16(16, 48));
         return {
-            prefix: sprintf_js_1.sprintf('%s', prefix.slice(0, 4)),
+            prefix: (0, sprintf_js_1.sprintf)('%s', prefix.slice(0, 4)),
             gateway: gateway.address,
         };
-    };
+    }
     /**
      * Return a v6 6to4 address from a v6 v4inv6 address
      * @memberof Address6
      * @instance
      * @returns {Address6}
      */
-    Address6.prototype.to6to4 = function () {
+    to6to4() {
         if (!this.is4()) {
             return null;
         }
-        var addr6to4 = [
+        const addr6to4 = [
             '2002',
             this.getBitsBase16(96, 112),
             this.getBitsBase16(112, 128),
@@ -1351,141 +1347,141 @@ var Address6 = /** @class */ (function () {
             '/16',
         ].join(':');
         return new Address6(addr6to4);
-    };
+    }
     /**
      * Return a byte array
      * @memberof Address6
      * @instance
      * @returns {Array}
      */
-    Address6.prototype.toByteArray = function () {
-        var byteArray = this.bigInteger().toByteArray();
+    toByteArray() {
+        const byteArray = this.bigInteger().toByteArray();
         // work around issue where `toByteArray` returns a leading 0 element
         if (byteArray.length === 17 && byteArray[0] === 0) {
             return byteArray.slice(1);
         }
         return byteArray;
-    };
+    }
     /**
      * Return an unsigned byte array
      * @memberof Address6
      * @instance
      * @returns {Array}
      */
-    Address6.prototype.toUnsignedByteArray = function () {
+    toUnsignedByteArray() {
         return this.toByteArray().map(unsignByte);
-    };
+    }
     /**
      * Convert a byte array to an Address6 object
      * @memberof Address6
      * @static
      * @returns {Address6}
      */
-    Address6.fromByteArray = function (bytes) {
+    static fromByteArray(bytes) {
         return this.fromUnsignedByteArray(bytes.map(unsignByte));
-    };
+    }
     /**
      * Convert an unsigned byte array to an Address6 object
      * @memberof Address6
      * @static
      * @returns {Address6}
      */
-    Address6.fromUnsignedByteArray = function (bytes) {
-        var BYTE_MAX = new jsbn_1.BigInteger('256', 10);
-        var result = new jsbn_1.BigInteger('0', 10);
-        var multiplier = new jsbn_1.BigInteger('1', 10);
-        for (var i = bytes.length - 1; i >= 0; i--) {
+    static fromUnsignedByteArray(bytes) {
+        const BYTE_MAX = new jsbn_1.BigInteger('256', 10);
+        let result = new jsbn_1.BigInteger('0', 10);
+        let multiplier = new jsbn_1.BigInteger('1', 10);
+        for (let i = bytes.length - 1; i >= 0; i--) {
             result = result.add(multiplier.multiply(new jsbn_1.BigInteger(bytes[i].toString(10), 10)));
             multiplier = multiplier.multiply(BYTE_MAX);
         }
         return Address6.fromBigInteger(result);
-    };
+    }
     /**
      * Returns true if the address is in the canonical form, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.isCanonical = function () {
+    isCanonical() {
         return this.addressMinusSuffix === this.canonicalForm();
-    };
+    }
     /**
      * Returns true if the address is a link local address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.isLinkLocal = function () {
+    isLinkLocal() {
         // Zeroes are required, i.e. we can't check isInSubnet with 'fe80::/10'
         if (this.getBitsBase2(0, 64) ===
             '1111111010000000000000000000000000000000000000000000000000000000') {
             return true;
         }
         return false;
-    };
+    }
     /**
      * Returns true if the address is a multicast address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.isMulticast = function () {
+    isMulticast() {
         return this.getType() === 'Multicast';
-    };
+    }
     /**
      * Returns true if the address is a v4-in-v6 address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.is4 = function () {
+    is4() {
         return this.v4;
-    };
+    }
     /**
      * Returns true if the address is a Teredo address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.isTeredo = function () {
+    isTeredo() {
         return this.isInSubnet(new Address6('2001::/32'));
-    };
+    }
     /**
      * Returns true if the address is a 6to4 address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.is6to4 = function () {
+    is6to4() {
         return this.isInSubnet(new Address6('2002::/16'));
-    };
+    }
     /**
      * Returns true if the address is a loopback address, false otherwise
      * @memberof Address6
      * @instance
      * @returns {boolean}
      */
-    Address6.prototype.isLoopback = function () {
+    isLoopback() {
         return this.getType() === 'Loopback';
-    };
+    }
     // #endregion
     // #region HTML
     /**
      * @returns {String} the address in link form with a default port of 80
      */
-    Address6.prototype.href = function (optionalPort) {
+    href(optionalPort) {
         if (optionalPort === undefined) {
             optionalPort = '';
         }
         else {
-            optionalPort = sprintf_js_1.sprintf(':%s', optionalPort);
+            optionalPort = (0, sprintf_js_1.sprintf)(':%s', optionalPort);
         }
-        return sprintf_js_1.sprintf('http://[%s]%s/', this.correctForm(), optionalPort);
-    };
+        return (0, sprintf_js_1.sprintf)('http://[%s]%s/', this.correctForm(), optionalPort);
+    }
     /**
      * @returns {String} a link suitable for conveying the address via a URL hash
      */
-    Address6.prototype.link = function (options) {
+    link(options) {
         if (!options) {
             options = {};
         }
@@ -1498,20 +1494,20 @@ var Address6 = /** @class */ (function () {
         if (options.v4 === undefined) {
             options.v4 = false;
         }
-        var formFunction = this.correctForm;
+        let formFunction = this.correctForm;
         if (options.v4) {
             formFunction = this.to4in6;
         }
         if (options.className) {
-            return sprintf_js_1.sprintf('<a href="%1$s%2$s" class="%3$s">%2$s</a>', options.prefix, formFunction.call(this), options.className);
+            return (0, sprintf_js_1.sprintf)('<a href="%1$s%2$s" class="%3$s">%2$s</a>', options.prefix, formFunction.call(this), options.className);
         }
-        return sprintf_js_1.sprintf('<a href="%1$s%2$s">%2$s</a>', options.prefix, formFunction.call(this));
-    };
+        return (0, sprintf_js_1.sprintf)('<a href="%1$s%2$s">%2$s</a>', options.prefix, formFunction.call(this));
+    }
     /**
      * Groups an address
      * @returns {String}
      */
-    Address6.prototype.group = function () {
+    group() {
         if (this.elidedGroups === 0) {
             // The simple case
             return helpers.simpleGroup(this.address).join(':');
@@ -1519,21 +1515,21 @@ var Address6 = /** @class */ (function () {
         assert(typeof this.elidedGroups === 'number');
         assert(typeof this.elisionBegin === 'number');
         // The elided case
-        var output = [];
-        var _a = this.address.split('::'), left = _a[0], right = _a[1];
+        const output = [];
+        const [left, right] = this.address.split('::');
         if (left.length) {
-            output.push.apply(output, helpers.simpleGroup(left));
+            output.push(...helpers.simpleGroup(left));
         }
         else {
             output.push('');
         }
-        var classes = ['hover-group'];
-        for (var i = this.elisionBegin; i < this.elisionBegin + this.elidedGroups; i++) {
-            classes.push(sprintf_js_1.sprintf('group-%d', i));
+        const classes = ['hover-group'];
+        for (let i = this.elisionBegin; i < this.elisionBegin + this.elidedGroups; i++) {
+            classes.push((0, sprintf_js_1.sprintf)('group-%d', i));
         }
-        output.push(sprintf_js_1.sprintf('<span class="%s"></span>', classes.join(' ')));
+        output.push((0, sprintf_js_1.sprintf)('<span class="%s"></span>', classes.join(' ')));
         if (right.length) {
-            output.push.apply(output, helpers.simpleGroup(right, this.elisionEnd));
+            output.push(...helpers.simpleGroup(right, this.elisionEnd));
         }
         else {
             output.push('');
@@ -1544,7 +1540,7 @@ var Address6 = /** @class */ (function () {
             output.push(this.address4.groupForV6());
         }
         return output.join(':');
-    };
+    }
     // #endregion
     // #region Regular expressions
     /**
@@ -1555,45 +1551,44 @@ var Address6 = /** @class */ (function () {
      * @param {boolean} substringSearch
      * @returns {string}
      */
-    Address6.prototype.regularExpressionString = function (substringSearch) {
-        if (substringSearch === void 0) { substringSearch = false; }
-        var output = [];
+    regularExpressionString(substringSearch = false) {
+        let output = [];
         // TODO: revisit why this is necessary
-        var address6 = new Address6(this.correctForm());
+        const address6 = new Address6(this.correctForm());
         if (address6.elidedGroups === 0) {
             // The simple case
-            output.push(regular_expressions_1.simpleRegularExpression(address6.parsedAddress));
+            output.push((0, regular_expressions_1.simpleRegularExpression)(address6.parsedAddress));
         }
         else if (address6.elidedGroups === constants6.GROUPS) {
             // A completely elided address
-            output.push(regular_expressions_1.possibleElisions(constants6.GROUPS));
+            output.push((0, regular_expressions_1.possibleElisions)(constants6.GROUPS));
         }
         else {
             // A partially elided address
-            var halves = address6.address.split('::');
+            const halves = address6.address.split('::');
             if (halves[0].length) {
-                output.push(regular_expressions_1.simpleRegularExpression(halves[0].split(':')));
+                output.push((0, regular_expressions_1.simpleRegularExpression)(halves[0].split(':')));
             }
             assert(typeof address6.elidedGroups === 'number');
-            output.push(regular_expressions_1.possibleElisions(address6.elidedGroups, halves[0].length !== 0, halves[1].length !== 0));
+            output.push((0, regular_expressions_1.possibleElisions)(address6.elidedGroups, halves[0].length !== 0, halves[1].length !== 0));
             if (halves[1].length) {
-                output.push(regular_expressions_1.simpleRegularExpression(halves[1].split(':')));
+                output.push((0, regular_expressions_1.simpleRegularExpression)(halves[1].split(':')));
             }
             output = [output.join(':')];
         }
         if (!substringSearch) {
-            output = __spreadArrays([
+            output = [
                 '(?=^|',
                 regular_expressions_1.ADDRESS_BOUNDARY,
-                '|[^\\w\\:])('
-            ], output, [
+                '|[^\\w\\:])(',
+                ...output,
                 ')(?=[^\\w\\:]|',
                 regular_expressions_1.ADDRESS_BOUNDARY,
                 '|$)',
-            ]);
+            ];
         }
         return output.join('');
-    };
+    }
     /**
      * Generate a regular expression that can be used to find or validate all
      * variations of this address.
@@ -1602,15 +1597,13 @@ var Address6 = /** @class */ (function () {
      * @param {boolean} substringSearch
      * @returns {RegExp}
      */
-    Address6.prototype.regularExpression = function (substringSearch) {
-        if (substringSearch === void 0) { substringSearch = false; }
+    regularExpression(substringSearch = false) {
         return new RegExp(this.regularExpressionString(substringSearch), 'i');
-    };
-    return Address6;
-}());
+    }
+}
 exports.Address6 = Address6;
 
-},{"./address-error":4,"./common":5,"./ipv4":6,"./v4/constants":8,"./v6/constants":9,"./v6/helpers":10,"./v6/regular-expressions":11,"jsbn":12,"sprintf-js":13}],8:[function(require,module,exports){
+},{"./address-error":3,"./common":4,"./ipv4":6,"./v4/constants":8,"./v6/constants":9,"./v6/helpers":10,"./v6/regular-expressions":11,"jsbn":12,"sprintf-js":13}],8:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RE_SUBNET_STRING = exports.RE_ADDRESS = exports.GROUPS = exports.BITS = void 0;
@@ -1700,7 +1693,7 @@ exports.RE_URL_WITH_PORT = new RegExp(/\[([0-9a-f:]+)\]:([0-9]{1,5})/);
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.simpleGroup = exports.spanLeadingZeroes = exports.spanAll = exports.spanAllZeroes = void 0;
-var sprintf_js_1 = require("sprintf-js");
+const sprintf_js_1 = require("sprintf-js");
 /**
  * @returns {String} the string with all zeroes contained in a <span>
  */
@@ -1711,13 +1704,10 @@ exports.spanAllZeroes = spanAllZeroes;
 /**
  * @returns {String} the string with each character contained in a <span>
  */
-function spanAll(s, offset) {
-    if (offset === void 0) { offset = 0; }
-    var letters = s.split('');
+function spanAll(s, offset = 0) {
+    const letters = s.split('');
     return letters
-        .map(function (n, i) {
-        return sprintf_js_1.sprintf('<span class="digit value-%s position-%d">%s</span>', n, i + offset, spanAllZeroes(n));
-    } // XXX Use #base-2 .value-0 instead?
+        .map((n, i) => (0, sprintf_js_1.sprintf)('<span class="digit value-%s position-%d">%s</span>', n, i + offset, spanAllZeroes(n)) // XXX Use #base-2 .value-0 instead?
     )
         .join('');
 }
@@ -1729,22 +1719,21 @@ function spanLeadingZeroesSimple(group) {
  * @returns {String} the string with leading zeroes contained in a <span>
  */
 function spanLeadingZeroes(address) {
-    var groups = address.split(':');
-    return groups.map(function (g) { return spanLeadingZeroesSimple(g); }).join(':');
+    const groups = address.split(':');
+    return groups.map((g) => spanLeadingZeroesSimple(g)).join(':');
 }
 exports.spanLeadingZeroes = spanLeadingZeroes;
 /**
  * Groups an address
  * @returns {String} a grouped address
  */
-function simpleGroup(addressString, offset) {
-    if (offset === void 0) { offset = 0; }
-    var groups = addressString.split(':');
-    return groups.map(function (g, i) {
+function simpleGroup(addressString, offset = 0) {
+    const groups = addressString.split(':');
+    return groups.map((g, i) => {
         if (/group-v4/.test(g)) {
             return g;
         }
-        return sprintf_js_1.sprintf('<span class="hover-group group-%d">%s</span>', i + offset, spanLeadingZeroesSimple(g));
+        return (0, sprintf_js_1.sprintf)('<span class="hover-group group-%d">%s</span>', i + offset, spanLeadingZeroesSimple(g));
     });
 }
 exports.simpleGroup = simpleGroup;
@@ -1753,7 +1742,11 @@ exports.simpleGroup = simpleGroup;
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
 }) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
@@ -1772,50 +1765,48 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.possibleElisions = exports.simpleRegularExpression = exports.ADDRESS_BOUNDARY = exports.padGroup = exports.groupPossibilities = void 0;
-var v6 = __importStar(require("./constants"));
-var sprintf_js_1 = require("sprintf-js");
+const v6 = __importStar(require("./constants"));
+const sprintf_js_1 = require("sprintf-js");
 function groupPossibilities(possibilities) {
-    return sprintf_js_1.sprintf('(%s)', possibilities.join('|'));
+    return (0, sprintf_js_1.sprintf)('(%s)', possibilities.join('|'));
 }
 exports.groupPossibilities = groupPossibilities;
 function padGroup(group) {
     if (group.length < 4) {
-        return sprintf_js_1.sprintf('0{0,%d}%s', 4 - group.length, group);
+        return (0, sprintf_js_1.sprintf)('0{0,%d}%s', 4 - group.length, group);
     }
     return group;
 }
 exports.padGroup = padGroup;
 exports.ADDRESS_BOUNDARY = '[^A-Fa-f0-9:]';
 function simpleRegularExpression(groups) {
-    var zeroIndexes = [];
-    groups.forEach(function (group, i) {
-        var groupInteger = parseInt(group, 16);
+    const zeroIndexes = [];
+    groups.forEach((group, i) => {
+        const groupInteger = parseInt(group, 16);
         if (groupInteger === 0) {
             zeroIndexes.push(i);
         }
     });
     // You can technically elide a single 0, this creates the regular expressions
     // to match that eventuality
-    var possibilities = zeroIndexes.map(function (zeroIndex) {
-        return groups
-            .map(function (group, i) {
-            if (i === zeroIndex) {
-                var elision = i === 0 || i === v6.GROUPS - 1 ? ':' : '';
-                return groupPossibilities([padGroup(group), elision]);
-            }
-            return padGroup(group);
-        })
-            .join(':');
-    });
+    const possibilities = zeroIndexes.map((zeroIndex) => groups
+        .map((group, i) => {
+        if (i === zeroIndex) {
+            const elision = i === 0 || i === v6.GROUPS - 1 ? ':' : '';
+            return groupPossibilities([padGroup(group), elision]);
+        }
+        return padGroup(group);
+    })
+        .join(':'));
     // The simplest case
     possibilities.push(groups.map(padGroup).join(':'));
     return groupPossibilities(possibilities);
 }
 exports.simpleRegularExpression = simpleRegularExpression;
 function possibleElisions(elidedGroups, moreLeft, moreRight) {
-    var left = moreLeft ? '' : ':';
-    var right = moreRight ? '' : ':';
-    var possibilities = [];
+    const left = moreLeft ? '' : ':';
+    const right = moreRight ? '' : ':';
+    const possibilities = [];
     // 1. elision of everything (::)
     if (!moreLeft && !moreRight) {
         possibilities.push('::');
@@ -1829,15 +1820,15 @@ function possibleElisions(elidedGroups, moreLeft, moreRight) {
         possibilities.push(':');
     }
     // 4. elision from the left side
-    possibilities.push(sprintf_js_1.sprintf('%s(:0{1,4}){1,%d}', left, elidedGroups - 1));
+    possibilities.push((0, sprintf_js_1.sprintf)('%s(:0{1,4}){1,%d}', left, elidedGroups - 1));
     // 5. elision from the right side
-    possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){1,%d}%s', elidedGroups - 1, right));
+    possibilities.push((0, sprintf_js_1.sprintf)('(0{1,4}:){1,%d}%s', elidedGroups - 1, right));
     // 6. no elision
-    possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){%d}0{1,4}', elidedGroups - 1));
+    possibilities.push((0, sprintf_js_1.sprintf)('(0{1,4}:){%d}0{1,4}', elidedGroups - 1));
     // 7. elision (including sloppy elision) from the middle
-    for (var groups = 1; groups < elidedGroups - 1; groups++) {
-        for (var position = 1; position < elidedGroups - groups; position++) {
-            possibilities.push(sprintf_js_1.sprintf('(0{1,4}:){%d}:(0{1,4}:){%d}0{1,4}', position, elidedGroups - position - groups - 1));
+    for (let groups = 1; groups < elidedGroups - 1; groups++) {
+        for (let position = 1; position < elidedGroups - groups; position++) {
+            possibilities.push((0, sprintf_js_1.sprintf)('(0{1,4}:){%d}:(0{1,4}:){%d}0{1,4}', position, elidedGroups - position - groups - 1));
         }
     }
     return groupPossibilities(possibilities);
@@ -3208,236 +3199,231 @@ exports.possibleElisions = possibleElisions;
 }).call(this);
 
 },{}],13:[function(require,module,exports){
+"use strict";
+
 /* global window, exports, define */
 
-!function() {
-    'use strict'
+!function () {
+  'use strict';
 
-    var re = {
-        not_string: /[^s]/,
-        not_bool: /[^t]/,
-        not_type: /[^T]/,
-        not_primitive: /[^v]/,
-        number: /[diefg]/,
-        numeric_arg: /[bcdiefguxX]/,
-        json: /[j]/,
-        not_json: /[^j]/,
-        text: /^[^\x25]+/,
-        modulo: /^\x25{2}/,
-        placeholder: /^\x25(?:([1-9]\d*)\$|\(([^)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-gijostTuvxX])/,
-        key: /^([a-z_][a-z_\d]*)/i,
-        key_access: /^\.([a-z_][a-z_\d]*)/i,
-        index_access: /^\[(\d+)\]/,
-        sign: /^[+-]/
-    }
-
-    function sprintf(key) {
-        // `arguments` is not an array, but should be fine for this call
-        return sprintf_format(sprintf_parse(key), arguments)
-    }
-
-    function vsprintf(fmt, argv) {
-        return sprintf.apply(null, [fmt].concat(argv || []))
-    }
-
-    function sprintf_format(parse_tree, argv) {
-        var cursor = 1, tree_length = parse_tree.length, arg, output = '', i, k, ph, pad, pad_character, pad_length, is_positive, sign
-        for (i = 0; i < tree_length; i++) {
-            if (typeof parse_tree[i] === 'string') {
-                output += parse_tree[i]
+  var re = {
+    not_string: /[^s]/,
+    not_bool: /[^t]/,
+    not_type: /[^T]/,
+    not_primitive: /[^v]/,
+    number: /[diefg]/,
+    numeric_arg: /[bcdiefguxX]/,
+    json: /[j]/,
+    not_json: /[^j]/,
+    text: /^[^\x25]+/,
+    modulo: /^\x25{2}/,
+    placeholder: /^\x25(?:([1-9]\d*)\$|\(([^)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-gijostTuvxX])/,
+    key: /^([a-z_][a-z_\d]*)/i,
+    key_access: /^\.([a-z_][a-z_\d]*)/i,
+    index_access: /^\[(\d+)\]/,
+    sign: /^[+-]/
+  };
+  function sprintf(key) {
+    // `arguments` is not an array, but should be fine for this call
+    return sprintf_format(sprintf_parse(key), arguments);
+  }
+  function vsprintf(fmt, argv) {
+    return sprintf.apply(null, [fmt].concat(argv || []));
+  }
+  function sprintf_format(parse_tree, argv) {
+    var cursor = 1,
+      tree_length = parse_tree.length,
+      arg,
+      output = '',
+      i,
+      k,
+      ph,
+      pad,
+      pad_character,
+      pad_length,
+      is_positive,
+      sign;
+    for (i = 0; i < tree_length; i++) {
+      if (typeof parse_tree[i] === 'string') {
+        output += parse_tree[i];
+      } else if (typeof parse_tree[i] === 'object') {
+        ph = parse_tree[i]; // convenience purposes only
+        if (ph.keys) {
+          // keyword argument
+          arg = argv[cursor];
+          for (k = 0; k < ph.keys.length; k++) {
+            if (arg == undefined) {
+              throw new Error(sprintf('[sprintf] Cannot access property "%s" of undefined value "%s"', ph.keys[k], ph.keys[k - 1]));
             }
-            else if (typeof parse_tree[i] === 'object') {
-                ph = parse_tree[i] // convenience purposes only
-                if (ph.keys) { // keyword argument
-                    arg = argv[cursor]
-                    for (k = 0; k < ph.keys.length; k++) {
-                        if (arg == undefined) {
-                            throw new Error(sprintf('[sprintf] Cannot access property "%s" of undefined value "%s"', ph.keys[k], ph.keys[k-1]))
-                        }
-                        arg = arg[ph.keys[k]]
-                    }
-                }
-                else if (ph.param_no) { // positional argument (explicit)
-                    arg = argv[ph.param_no]
-                }
-                else { // positional argument (implicit)
-                    arg = argv[cursor++]
-                }
-
-                if (re.not_type.test(ph.type) && re.not_primitive.test(ph.type) && arg instanceof Function) {
-                    arg = arg()
-                }
-
-                if (re.numeric_arg.test(ph.type) && (typeof arg !== 'number' && isNaN(arg))) {
-                    throw new TypeError(sprintf('[sprintf] expecting number but found %T', arg))
-                }
-
-                if (re.number.test(ph.type)) {
-                    is_positive = arg >= 0
-                }
-
-                switch (ph.type) {
-                    case 'b':
-                        arg = parseInt(arg, 10).toString(2)
-                        break
-                    case 'c':
-                        arg = String.fromCharCode(parseInt(arg, 10))
-                        break
-                    case 'd':
-                    case 'i':
-                        arg = parseInt(arg, 10)
-                        break
-                    case 'j':
-                        arg = JSON.stringify(arg, null, ph.width ? parseInt(ph.width) : 0)
-                        break
-                    case 'e':
-                        arg = ph.precision ? parseFloat(arg).toExponential(ph.precision) : parseFloat(arg).toExponential()
-                        break
-                    case 'f':
-                        arg = ph.precision ? parseFloat(arg).toFixed(ph.precision) : parseFloat(arg)
-                        break
-                    case 'g':
-                        arg = ph.precision ? String(Number(arg.toPrecision(ph.precision))) : parseFloat(arg)
-                        break
-                    case 'o':
-                        arg = (parseInt(arg, 10) >>> 0).toString(8)
-                        break
-                    case 's':
-                        arg = String(arg)
-                        arg = (ph.precision ? arg.substring(0, ph.precision) : arg)
-                        break
-                    case 't':
-                        arg = String(!!arg)
-                        arg = (ph.precision ? arg.substring(0, ph.precision) : arg)
-                        break
-                    case 'T':
-                        arg = Object.prototype.toString.call(arg).slice(8, -1).toLowerCase()
-                        arg = (ph.precision ? arg.substring(0, ph.precision) : arg)
-                        break
-                    case 'u':
-                        arg = parseInt(arg, 10) >>> 0
-                        break
-                    case 'v':
-                        arg = arg.valueOf()
-                        arg = (ph.precision ? arg.substring(0, ph.precision) : arg)
-                        break
-                    case 'x':
-                        arg = (parseInt(arg, 10) >>> 0).toString(16)
-                        break
-                    case 'X':
-                        arg = (parseInt(arg, 10) >>> 0).toString(16).toUpperCase()
-                        break
-                }
-                if (re.json.test(ph.type)) {
-                    output += arg
-                }
-                else {
-                    if (re.number.test(ph.type) && (!is_positive || ph.sign)) {
-                        sign = is_positive ? '+' : '-'
-                        arg = arg.toString().replace(re.sign, '')
-                    }
-                    else {
-                        sign = ''
-                    }
-                    pad_character = ph.pad_char ? ph.pad_char === '0' ? '0' : ph.pad_char.charAt(1) : ' '
-                    pad_length = ph.width - (sign + arg).length
-                    pad = ph.width ? (pad_length > 0 ? pad_character.repeat(pad_length) : '') : ''
-                    output += ph.align ? sign + arg + pad : (pad_character === '0' ? sign + pad + arg : pad + sign + arg)
-                }
-            }
+            arg = arg[ph.keys[k]];
+          }
+        } else if (ph.param_no) {
+          // positional argument (explicit)
+          arg = argv[ph.param_no];
+        } else {
+          // positional argument (implicit)
+          arg = argv[cursor++];
         }
-        return output
-    }
-
-    var sprintf_cache = Object.create(null)
-
-    function sprintf_parse(fmt) {
-        if (sprintf_cache[fmt]) {
-            return sprintf_cache[fmt]
+        if (re.not_type.test(ph.type) && re.not_primitive.test(ph.type) && arg instanceof Function) {
+          arg = arg();
         }
-
-        var _fmt = fmt, match, parse_tree = [], arg_names = 0
-        while (_fmt) {
-            if ((match = re.text.exec(_fmt)) !== null) {
-                parse_tree.push(match[0])
-            }
-            else if ((match = re.modulo.exec(_fmt)) !== null) {
-                parse_tree.push('%')
-            }
-            else if ((match = re.placeholder.exec(_fmt)) !== null) {
-                if (match[2]) {
-                    arg_names |= 1
-                    var field_list = [], replacement_field = match[2], field_match = []
-                    if ((field_match = re.key.exec(replacement_field)) !== null) {
-                        field_list.push(field_match[1])
-                        while ((replacement_field = replacement_field.substring(field_match[0].length)) !== '') {
-                            if ((field_match = re.key_access.exec(replacement_field)) !== null) {
-                                field_list.push(field_match[1])
-                            }
-                            else if ((field_match = re.index_access.exec(replacement_field)) !== null) {
-                                field_list.push(field_match[1])
-                            }
-                            else {
-                                throw new SyntaxError('[sprintf] failed to parse named argument key')
-                            }
-                        }
-                    }
-                    else {
-                        throw new SyntaxError('[sprintf] failed to parse named argument key')
-                    }
-                    match[2] = field_list
-                }
-                else {
-                    arg_names |= 2
-                }
-                if (arg_names === 3) {
-                    throw new Error('[sprintf] mixing positional and named placeholders is not (yet) supported')
-                }
-
-                parse_tree.push(
-                    {
-                        placeholder: match[0],
-                        param_no:    match[1],
-                        keys:        match[2],
-                        sign:        match[3],
-                        pad_char:    match[4],
-                        align:       match[5],
-                        width:       match[6],
-                        precision:   match[7],
-                        type:        match[8]
-                    }
-                )
-            }
-            else {
-                throw new SyntaxError('[sprintf] unexpected placeholder')
-            }
-            _fmt = _fmt.substring(match[0].length)
+        if (re.numeric_arg.test(ph.type) && typeof arg !== 'number' && isNaN(arg)) {
+          throw new TypeError(sprintf('[sprintf] expecting number but found %T', arg));
         }
-        return sprintf_cache[fmt] = parse_tree
-    }
-
-    /**
-     * export to either browser or node.js
-     */
-    /* eslint-disable quote-props */
-    if (typeof exports !== 'undefined') {
-        exports['sprintf'] = sprintf
-        exports['vsprintf'] = vsprintf
-    }
-    if (typeof window !== 'undefined') {
-        window['sprintf'] = sprintf
-        window['vsprintf'] = vsprintf
-
-        if (typeof define === 'function' && define['amd']) {
-            define(function() {
-                return {
-                    'sprintf': sprintf,
-                    'vsprintf': vsprintf
-                }
-            })
+        if (re.number.test(ph.type)) {
+          is_positive = arg >= 0;
         }
+        switch (ph.type) {
+          case 'b':
+            arg = parseInt(arg, 10).toString(2);
+            break;
+          case 'c':
+            arg = String.fromCharCode(parseInt(arg, 10));
+            break;
+          case 'd':
+          case 'i':
+            arg = parseInt(arg, 10);
+            break;
+          case 'j':
+            arg = JSON.stringify(arg, null, ph.width ? parseInt(ph.width) : 0);
+            break;
+          case 'e':
+            arg = ph.precision ? parseFloat(arg).toExponential(ph.precision) : parseFloat(arg).toExponential();
+            break;
+          case 'f':
+            arg = ph.precision ? parseFloat(arg).toFixed(ph.precision) : parseFloat(arg);
+            break;
+          case 'g':
+            arg = ph.precision ? String(Number(arg.toPrecision(ph.precision))) : parseFloat(arg);
+            break;
+          case 'o':
+            arg = (parseInt(arg, 10) >>> 0).toString(8);
+            break;
+          case 's':
+            arg = String(arg);
+            arg = ph.precision ? arg.substring(0, ph.precision) : arg;
+            break;
+          case 't':
+            arg = String(!!arg);
+            arg = ph.precision ? arg.substring(0, ph.precision) : arg;
+            break;
+          case 'T':
+            arg = Object.prototype.toString.call(arg).slice(8, -1).toLowerCase();
+            arg = ph.precision ? arg.substring(0, ph.precision) : arg;
+            break;
+          case 'u':
+            arg = parseInt(arg, 10) >>> 0;
+            break;
+          case 'v':
+            arg = arg.valueOf();
+            arg = ph.precision ? arg.substring(0, ph.precision) : arg;
+            break;
+          case 'x':
+            arg = (parseInt(arg, 10) >>> 0).toString(16);
+            break;
+          case 'X':
+            arg = (parseInt(arg, 10) >>> 0).toString(16).toUpperCase();
+            break;
+        }
+        if (re.json.test(ph.type)) {
+          output += arg;
+        } else {
+          if (re.number.test(ph.type) && (!is_positive || ph.sign)) {
+            sign = is_positive ? '+' : '-';
+            arg = arg.toString().replace(re.sign, '');
+          } else {
+            sign = '';
+          }
+          pad_character = ph.pad_char ? ph.pad_char === '0' ? '0' : ph.pad_char.charAt(1) : ' ';
+          pad_length = ph.width - (sign + arg).length;
+          pad = ph.width ? pad_length > 0 ? pad_character.repeat(pad_length) : '' : '';
+          output += ph.align ? sign + arg + pad : pad_character === '0' ? sign + pad + arg : pad + sign + arg;
+        }
+      }
     }
-    /* eslint-enable quote-props */
+    return output;
+  }
+  var sprintf_cache = Object.create(null);
+  function sprintf_parse(fmt) {
+    if (sprintf_cache[fmt]) {
+      return sprintf_cache[fmt];
+    }
+    var _fmt = fmt,
+      match,
+      parse_tree = [],
+      arg_names = 0;
+    while (_fmt) {
+      if ((match = re.text.exec(_fmt)) !== null) {
+        parse_tree.push(match[0]);
+      } else if ((match = re.modulo.exec(_fmt)) !== null) {
+        parse_tree.push('%');
+      } else if ((match = re.placeholder.exec(_fmt)) !== null) {
+        if (match[2]) {
+          arg_names |= 1;
+          var field_list = [],
+            replacement_field = match[2],
+            field_match = [];
+          if ((field_match = re.key.exec(replacement_field)) !== null) {
+            field_list.push(field_match[1]);
+            while ((replacement_field = replacement_field.substring(field_match[0].length)) !== '') {
+              if ((field_match = re.key_access.exec(replacement_field)) !== null) {
+                field_list.push(field_match[1]);
+              } else if ((field_match = re.index_access.exec(replacement_field)) !== null) {
+                field_list.push(field_match[1]);
+              } else {
+                throw new SyntaxError('[sprintf] failed to parse named argument key');
+              }
+            }
+          } else {
+            throw new SyntaxError('[sprintf] failed to parse named argument key');
+          }
+          match[2] = field_list;
+        } else {
+          arg_names |= 2;
+        }
+        if (arg_names === 3) {
+          throw new Error('[sprintf] mixing positional and named placeholders is not (yet) supported');
+        }
+        parse_tree.push({
+          placeholder: match[0],
+          param_no: match[1],
+          keys: match[2],
+          sign: match[3],
+          pad_char: match[4],
+          align: match[5],
+          width: match[6],
+          precision: match[7],
+          type: match[8]
+        });
+      } else {
+        throw new SyntaxError('[sprintf] unexpected placeholder');
+      }
+      _fmt = _fmt.substring(match[0].length);
+    }
+    return sprintf_cache[fmt] = parse_tree;
+  }
+
+  /**
+   * export to either browser or node.js
+   */
+  /* eslint-disable quote-props */
+  if (typeof exports !== 'undefined') {
+    exports['sprintf'] = sprintf;
+    exports['vsprintf'] = vsprintf;
+  }
+  if (typeof window !== 'undefined') {
+    window['sprintf'] = sprintf;
+    window['vsprintf'] = vsprintf;
+    if (typeof define === 'function' && define['amd']) {
+      define(function () {
+        return {
+          'sprintf': sprintf,
+          'vsprintf': vsprintf
+        };
+      });
+    }
+  }
+  /* eslint-enable quote-props */
 }(); // eslint-disable-line
 
 },{}]},{},[2]);
