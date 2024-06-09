@@ -1,6 +1,6 @@
 "use strict";
 
-import ipAddress from 'ip-address';
+import * as ipAddress from 'ip-address';
 
 class IPCIDR {
   constructor(cidr) {
@@ -13,14 +13,14 @@ class IPCIDR {
     this.ipAddressType = address.constructor;
     this.address = address;
     this.addressStart = address.startAddress();
-    this.addressEnd = address.endAddress();    
+    this.addressEnd = address.endAddress();
     this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
     this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
     const end = BigInt(this.addressEnd.bigInteger());
     const start = BigInt(this.addressStart.bigInteger());
     this.size = end - start + 1n;
   }
-  
+
   contains(address) {
     try {
       if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
@@ -36,7 +36,7 @@ class IPCIDR {
     }
     catch(err) {
       return false;
-    }   
+    }
   }
 
   start(options) {
@@ -82,7 +82,7 @@ class IPCIDR {
 
     return list;
   }
-  
+
   loop(fn, options, results) {
     options = options || {};
     const promise = [];
@@ -90,7 +90,7 @@ class IPCIDR {
     const end = this.constructor.formatIP(this.addressEnd, { type: 'bigInteger' });
     const length = end - start + 1n;
     const info = this.getChunkInfo(length, options);
-    
+
     if(results)  {
       Object.assign(results, info);
     }
@@ -139,14 +139,14 @@ class IPCIDR {
     }
     else {
       limit = limit !== undefined? getBigInteger(limit): length;
-    }   
+    }
 
     maxLength = length - from;
-    
+
     if(limit > maxLength) {
       limit = maxLength;
     }
-    
+
     to = from + limit;
     return {
       from: from,
