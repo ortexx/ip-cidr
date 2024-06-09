@@ -5,8 +5,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.default = void 0;
-var _ipAddress = _interopRequireDefault(require("ip-address"));
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var ipAddress = _interopRequireWildcard(require("ip-address"));
+function _getRequireWildcardCache(e) { if ("function" != typeof WeakMap) return null; var r = new WeakMap(), t = new WeakMap(); return (_getRequireWildcardCache = function (e) { return e ? t : r; })(e); }
+function _interopRequireWildcard(e, r) { if (!r && e && e.__esModule) return e; if (null === e || "object" != typeof e && "function" != typeof e) return { default: e }; var t = _getRequireWildcardCache(r); if (t && t.has(e)) return t.get(e); var n = { __proto__: null }, a = Object.defineProperty && Object.getOwnPropertyDescriptor; for (var u in e) if ("default" !== u && Object.prototype.hasOwnProperty.call(e, u)) { var i = a ? Object.getOwnPropertyDescriptor(e, u) : null; i && (i.get || i.set) ? Object.defineProperty(n, u, i) : n[u] = e[u]; } return n.default = e, t && t.set(e, n), n; }
 class IPCIDR {
   constructor(cidr) {
     if (typeof cidr !== 'string' || !cidr.match('/')) {
@@ -26,7 +27,7 @@ class IPCIDR {
   }
   contains(address) {
     try {
-      if (!(address instanceof _ipAddress.default.Address6) && !(address instanceof _ipAddress.default.Address4)) {
+      if (!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
         if (typeof address == 'bigint') {
           address = this.ipAddressType.fromBigInteger(address);
         } else {
@@ -157,7 +158,7 @@ IPCIDR.createAddress = function (val) {
     throw new Error('Invalid IP address.');
   }
   val.match(/:.\./) && (val = val.split(':').pop());
-  const ipAddressType = val.match(":") ? _ipAddress.default.Address6 : _ipAddress.default.Address4;
+  const ipAddressType = val.match(":") ? ipAddress.Address6 : ipAddress.Address4;
   let ip = new ipAddressType(val);
   if (ip.v4 && val.match(":") && ip.address4) {
     ip = ip.address4;
