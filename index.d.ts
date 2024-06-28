@@ -54,4 +54,4 @@ declare namespace IPCIDR {
   export function createAddress(address: string): Address;
 }
 
-export = IPCIDR;
+export default IPCIDR;
