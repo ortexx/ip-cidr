@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.default = void 0;
 var _ipAddress = _interopRequireDefault(require("ip-address"));
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
 class IPCIDR {
   constructor(cidr) {
     if (typeof cidr !== 'string' || !cidr.match('/')) {
@@ -196,7 +196,7 @@ var _default = exports.default = IPCIDR;
 "use strict";
 
 var _index = _interopRequireDefault(require("./index.js"));
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
 window.IPCIDR = _index.default;
 
 },{"./index.js":1}],3:[function(require,module,exports){
