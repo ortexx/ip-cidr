@@ -8,7 +8,7 @@ Since v4+ using javascript BigInt for big numbers handling.
 # Example  
 
 ```js
-const IPCIDR = require("ip-cidr");
+import IPCIDR from 'ip-cidr';
 const address = "50.165.190.0/23";
 
 if(!IPCIDR.isValidCIDR(address)) {
