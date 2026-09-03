@@ -16,8 +16,8 @@ class IPCIDR {
     this.addressEnd = address.endAddress();    
     this.addressStart.subnet = this.addressEnd.subnet = this.address.subnet;
     this.addressStart.subnetMask = this.addressEnd.subnetMask = this.address.subnetMask;
-    const end = BigInt(this.addressEnd.bigInteger());
-    const start = BigInt(this.addressStart.bigInteger());
+    const end = this.addressEnd.bigInt();
+    const start = this.addressStart.bigInt();
     this.size = end - start + 1n;
   }
   
@@ -25,7 +25,7 @@ class IPCIDR {
     try {
       if(!(address instanceof ipAddress.Address6) && !(address instanceof ipAddress.Address4)) {
         if(typeof address == 'bigint') {
-          address = this.ipAddressType.fromBigInteger(address);
+          address = this.ipAddressType.fromBigInt(address);
         }
         else {
           address = this.constructor.createAddress(address);
@@ -76,7 +76,7 @@ class IPCIDR {
 
     this.loopInfo(info, (val) => {
       const num = start + val;
-      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInt(num), options);
       list.push(ip);
     });
 
@@ -97,7 +97,7 @@ class IPCIDR {
 
     this.loopInfo(info, (val) => {
       const num = start + val;
-      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInteger(num), options);
+      const ip = this.constructor.formatIP(this.ipAddressType.fromBigInt(num), options);
       promise.push(fn(ip));
     });
 
@@ -161,7 +161,7 @@ IPCIDR.formatIP = function(address, options) {
   options = options || {};
 
   if (options.type == "bigInteger") {
-    return BigInt(address.bigInteger());
+    return address.bigInt();
   }
   else if (options.type == "addressObject") {
     return address;
