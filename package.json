@@ -28,10 +28,10 @@
     }
   },
   "dependencies": {
-    "ip-address": "^9.0.5"
+    "ip-address": "^10.7.4"
   },
   "devDependencies": {
-    "browserify": "^17.0.0",
+    "browserify": "^17.0.1",
     "chai": "^4.3.0",
     "esmify": "^2.1.1",
     "husky": "^4.2.3",
